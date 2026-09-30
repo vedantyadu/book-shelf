@@ -1,10 +1,10 @@
-import bookshelfIcon from './assets/bookshelf_icon.svg'
 import { useEffect } from 'react'
+import bookshelfIcon from './assets/bookshelf-icon.svg'
 import { googleAuthRedirect } from './lib/auth_redirect'
 
 function App() {
   useEffect(() => {
-    googleAuthRedirect()
+    setTimeout(googleAuthRedirect, 3000)
   }, [])
 
   return (
@@ -16,13 +16,11 @@ function App() {
         width='75px'
         height='75px'
       />
-      <div className='flex flex-col items-center gap-2 text-center'>
-        <span className='text-neutral-200 text-xl font-medium'>
-          You have been successfully authenticated.
+      <div className='flex flex-col items-center text-center'>
+        <span className='text-neutral-300 text-lg font-medium'>
+          Authentication successful,
         </span>
-        <span className='text-neutral-400'>
-          You will be redirected shortly.
-        </span>
+        <span className='text-neutral-500'>You are being redirected.</span>
       </div>
     </div>
   )
