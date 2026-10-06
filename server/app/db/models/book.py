@@ -1,19 +1,29 @@
+import datetime
 import uuid
+from typing import TYPE_CHECKING
+
+from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.utils.datetime import utcnow
 
-from sqlalchemy import Column, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+if TYPE_CHECKING:
+    from app.db.models.page import Page
+    from app.db.models.user import User
+
 
 class Book(Base):
     __tablename__ = "books"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    title = Column(String, nullable=False)
-    author = Column(String, nullable=False)
-    owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    image_url = Column(String, nullable=False)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    title: Mapped[str] = mapped_column(String)
+    author: Mapped[str] = mapped_column(String)
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    image_url: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
-    owner = relationship("User", back_populates="books")
-    pages = relationship("Page", back_populates="book")
+    owner: Mapped["User"] = relationship(back_populates="books")
+    pages: Mapped[list["Page"]] = relationship(back_populates="book")

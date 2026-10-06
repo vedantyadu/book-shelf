@@ -1,16 +1,35 @@
 import uuid
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
-from sqlalchemy import UUID, Column, ForeignKey, String, DateTime
-from sqlalchemy.orm import relationship
+from app.utils.datetime import utcnow
+
+if TYPE_CHECKING:
+    from app.db.models.user import User
+
+from sqlalchemy import DateTime, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
-class RefreshToken(Base):
-  id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)    
-  owner_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-  token = Column(String, unique=True, nullable=False)
-  created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
-  expires_at = Column(DateTime(timezone=True), default=lambda: datetime.utcnow() + timedelta(days=7))
 
-  owner = relationship("User", back_populates="refresh_tokens")
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id")
+    )
+    token: Mapped[str] = mapped_column(unique=True)
+    revoked: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: utcnow() + timedelta(days=7)
+    )
+
+    owner: Mapped["User"] = relationship(back_populates="refresh_tokens")

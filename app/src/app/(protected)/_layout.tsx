@@ -1,16 +1,28 @@
-import AuthLoadScreen from '@/components/screens/app/AuthLoadScreen'
-import { useAuthContext } from '@/context/AuthContext'
+import { LoadScreen } from '@/components/app/load-screen'
+import { useAppContext } from '@/context/app-context'
+import { ScanContextProvider } from '@/context/scan-context'
 import { Redirect, Stack } from 'expo-router'
 
 export default function ProtectedLayout() {
-  const { auth } = useAuthContext()
+  const { auth } = useAppContext()
 
-  if (!auth.userDataFetched) {
-    return <AuthLoadScreen />
+  if (auth.loading) {
+    return <LoadScreen />
   }
-  if (auth.userDataFetched && !auth.user) {
+  if (!auth.user) {
     return <Redirect href='/auth' />
   }
-
-  return <Stack />
+  return (
+    <ScanContextProvider>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+        }}
+      >
+        <Stack.Screen name='index' />
+        <Stack.Screen name='settings' />
+        <Stack.Screen name='scan-result' />
+      </Stack>
+    </ScanContextProvider>
+  )
 }

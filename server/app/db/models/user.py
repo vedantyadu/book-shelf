@@ -1,19 +1,32 @@
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+from sqlalchemy import DateTime, String
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.utils.datetime import utcnow
 
-from sqlalchemy import Column, DateTime, String
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+if TYPE_CHECKING:
+    from app.db.models.book import Book
+    from app.db.models.refresh_token import RefreshToken
+    from app.db.models.subscription import Subscription
+
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    google_id = Column(String, unique=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    google_id: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    email: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
 
-    books = relationship("Book", back_populates="owner")
-    subscriptions = relationship("Subscription", back_populates="owner")
-    refresh_tokens = relationship("RefreshToken", back_populates="owner")
+    books: Mapped[list["Book"]] = relationship(back_populates="owner")
+    subscriptions: Mapped[list["Subscription"]] = relationship(back_populates="owner")
+    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="owner")

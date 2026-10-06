@@ -6,7 +6,7 @@ import {
   setRefreshToken,
 } from './access_token'
 
-const API_URL = 'http://192.168.1.4'
+const API_URL = process.env.EXPO_PUBLIC_API_URL
 
 export const api = axios.create({
   baseURL: API_URL,

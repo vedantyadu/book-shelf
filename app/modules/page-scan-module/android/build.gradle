@@ -1,0 +1,25 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+System.setProperty("java.home", "C:\\Program Files\\Eclipse Adoptium\\jdk-17.0.20.101-hotspot")
+
+group = 'expo.modules.pagescanmodule'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.pagescanmodule"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  implementation 'com.google.android.gms:play-services-mlkit-document-scanner:16.0.0'
+  implementation 'com.google.mlkit:text-recognition:16.0.1'
+}

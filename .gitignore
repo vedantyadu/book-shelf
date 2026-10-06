@@ -1,0 +1,27 @@
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.lnk
+
+# Editor / IDE
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# AI tool configs
+.claude/
+.agents/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
