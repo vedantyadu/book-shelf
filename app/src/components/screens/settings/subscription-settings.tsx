@@ -3,7 +3,7 @@ import { Section } from '@/components/ui/section'
 import { useAppContext } from '@/context/app-context'
 import { ensureInterop } from '@/utils/icon-interop'
 import { router } from 'expo-router'
-import { Gem } from 'lucide-react-native'
+import { ArrowRight } from 'lucide-react-native'
 import { Pressable, View } from 'react-native'
 import {
   SubscriptionDescription,
@@ -23,17 +23,15 @@ export function SubscriptionSettings() {
 
   return (
     <Section heading='Subscription'>
-      <View className='flex-row items-center justify-between mb-2'>
-        <SubscriptionPlanName plan={subscription.plan} />
-        <SubscriptionPrice billing_cycle={subscription.plan.billing_cycle} />
-      </View>
-      <View className='mb-2'>
+      <View className='gap-4'>
+        <View className='flex-row items-center justify-between'>
+          <SubscriptionPlanName plan={subscription.plan} />
+          <SubscriptionPrice billing_cycle={subscription.plan.billing_cycle} />
+        </View>
         <SubscriptionDescription plan={subscription.plan} />
-      </View>
-      <View className='mb-2'>
         <SubscriptionExpiry timestamp={subscription.expires_at} />
+        <ManageSubscriptionPressable />
       </View>
-      <ManageSubscriptionPressable />
     </Section>
   )
 }
@@ -54,9 +52,11 @@ function ManageSubscriptionPressable() {
       >
         Manage subscription
       </GoogleSansText>
-      <Gem className='text-neutral-100 size-5' />
+      <View className='size-4 justify-center items-center'>
+        <ArrowRight className='text-neutral-100 size-4' />
+      </View>
     </Pressable>
   )
 }
 
-ensureInterop([Gem])
+ensureInterop([ArrowRight])

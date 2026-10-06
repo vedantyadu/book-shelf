@@ -23,6 +23,7 @@ export interface Colors {
 }
 
 export interface Metadata {
+  razorpay_plan_id: string
   colors: Colors
   description: string[]
 }

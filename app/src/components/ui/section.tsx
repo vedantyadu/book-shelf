@@ -10,7 +10,7 @@ export function Section({
   children: ReactNode
 }) {
   return (
-    <View className='rounded-xl p-4 bg-neutral-100 dark:bg-neutral-900 gap-2'>
+    <View className='rounded-xl p-4 bg-bg-secondary gap-2'>
       {heading && (
         <GoogleSansText
           className='text-lg'

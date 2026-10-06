@@ -1,6 +1,7 @@
-import { BottomBar, SafeScreen } from '@/components/app/app-layout'
+import { BottomBar, SafeScreen, TopBar } from '@/components/app/app-layout'
 import { LoadScreen } from '@/components/app/load-screen'
 import { SubscriptionItem } from '@/components/screens/subscription/subscription-item'
+import { Section } from '@/components/ui/section'
 import { useAppContext } from '@/context/app-context'
 import { api } from '@/lib/api'
 import { SubscriptionPlansDataType } from '@/types/subscription'
@@ -13,6 +14,10 @@ export default function SubscriptionScreen() {
     useState<SubscriptionPlansDataType>({})
 
   const [loading, setLoading] = useState<boolean>(true)
+
+  const availablePlans = Object.entries(subscriptionPlans).filter(
+    ([plan_id, plan]) => plan_id !== userSubscription?.subscription?.id,
+  )
 
   useEffect(() => {
     const fetchSubscriptionPlans = async () => {
@@ -30,6 +35,7 @@ export default function SubscriptionScreen() {
 
   return (
     <SafeScreen>
+      <TopBar title='Subscription' />
       {loading ? (
         <LoadScreen />
       ) : (
@@ -39,23 +45,27 @@ export default function SubscriptionScreen() {
         >
           <View className='gap-4 px-4'>
             {userSubscription.subscription && (
-              <SubscriptionItem
-                plan={userSubscription.subscription?.plan}
-                plan_id={userSubscription.subscription?.id}
-              />
-            )}
-            {Object.entries(subscriptionPlans)
-              .filter(
-                ([plan_id, plan]) =>
-                  plan_id !== userSubscription?.subscription?.id,
-              )
-              .map(([plan_id, plan]) => (
+              <Section heading='Current plan'>
                 <SubscriptionItem
-                  key={plan_id}
-                  plan={plan}
-                  plan_id={plan_id}
+                  plan={userSubscription.subscription?.plan}
+                  plan_id={userSubscription.subscription?.id}
+                  expires_at={userSubscription.subscription?.expires_at}
                 />
+              </Section>
+            )}
+            <Section heading='Available plans'>
+              {availablePlans.map(([plan_id, plan], index) => (
+                <View key={plan_id}>
+                  <SubscriptionItem
+                    plan={plan}
+                    plan_id={plan_id}
+                  />
+                  {index !== availablePlans.length - 1 && (
+                    <View className='h-px bg-icon mt-4 mb-2 text-green-' />
+                  )}
+                </View>
               ))}
+            </Section>
           </View>
         </ScrollView>
       )}

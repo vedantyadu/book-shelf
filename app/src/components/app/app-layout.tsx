@@ -1,22 +1,17 @@
+import { ensureInterop } from '@/utils/icon-interop'
+import { router } from 'expo-router'
+import { ArrowLeft } from 'lucide-react-native'
 import { PropsWithChildren } from 'react'
-import { View } from 'react-native'
+import { Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { GoogleSansText } from '../ui/fonts'
 
 const BOTTOM_GRADIENT_HEIGHT = 0
 
 export function SafeScreen({ children }: PropsWithChildren) {
   const insets = useSafeAreaInsets()
 
-  return (
-    <View
-      className='relative flex-1 bg-bg-primary'
-      style={{
-        paddingTop: insets.top,
-      }}
-    >
-      {children}
-    </View>
-  )
+  return <View className='relative flex-1 bg-bg-primary'>{children}</View>
 }
 
 export function BottomBar({ children }: PropsWithChildren) {
@@ -24,6 +19,7 @@ export function BottomBar({ children }: PropsWithChildren) {
 
   return (
     <View
+      className='bg-bg-primary'
       style={{
         height: height,
       }}
@@ -37,3 +33,37 @@ export function useBottomBarHeight() {
   const insets = useSafeAreaInsets()
   return insets.bottom + BOTTOM_GRADIENT_HEIGHT
 }
+
+export function TopBar({ title }: { title: string }) {
+  const inset = useSafeAreaInsets()
+
+  const goBack = () => {
+    router.back()
+  }
+
+  return (
+    <View
+      className='bg-bg-primary'
+      style={{
+        paddingTop: inset.top,
+      }}
+    >
+      <View className='flex-row items-center gap-4 h-12 px-4 pb-4'>
+        <Pressable
+          className='size-6'
+          onPress={goBack}
+        >
+          <ArrowLeft className='text-text-secondary size-6' />
+        </Pressable>
+        <GoogleSansText
+          variant='semi-bold'
+          className='text-2xl'
+        >
+          {title}
+        </GoogleSansText>
+      </View>
+    </View>
+  )
+}
+
+ensureInterop([ArrowLeft])

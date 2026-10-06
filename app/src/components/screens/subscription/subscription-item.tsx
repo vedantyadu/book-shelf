@@ -1,48 +1,49 @@
 import { GoogleSansText } from '@/components/ui/fonts'
-import { Section } from '@/components/ui/section'
 import { useAppContext } from '@/context/app-context'
 import { SubscriptionType } from '@/types/subscription'
 import { formatDateFromSecondsTimestamp } from '@/utils/date-time'
 import { ensureInterop } from '@/utils/icon-interop'
-import { Asterisk, CalendarClock } from 'lucide-react-native'
+import { router } from 'expo-router'
+import { Asterisk, CalendarClock, Gem, X } from 'lucide-react-native'
 import { Pressable, View } from 'react-native'
 
 export function SubscriptionItem({
   plan,
   plan_id,
+  expires_at,
 }: {
   plan: SubscriptionType['plan']
   plan_id: string
+  expires_at?: SubscriptionType['expires_at']
 }) {
   const { userSubscription } = useAppContext()
 
   const isCurrentPlan = userSubscription.subscription?.id === plan_id
-  const expiresAt = userSubscription.subscription?.expires_at ?? null
+
+  const RenderButton = () => {
+    if (plan.default) {
+      return null
+    }
+    if (isCurrentPlan) {
+      return <CancelSubscription plan_id={plan_id} />
+    }
+    return <SelectSubscriptionPressable plan_id={plan_id} />
+  }
 
   return (
-    <Section heading={isCurrentPlan ? 'Current plan' : undefined}>
-      <View className='flex-row items-center justify-between mb-2'>
+    <View className='gap-4'>
+      <View className='flex-row items-center justify-between'>
         <SubscriptionPlanName plan={plan} />
         <SubscriptionPrice billing_cycle={plan.billing_cycle} />
       </View>
-      <View className='mb-2'>
-        <SubscriptionDescription plan={plan} />
-      </View>
+      <SubscriptionDescription plan={plan} />
 
-      {isCurrentPlan && (
-        <View className='mb-2'>
-          <SubscriptionExpiry timestamp={expiresAt} />
-        </View>
+      {expires_at !== undefined && (
+        <SubscriptionExpiry timestamp={expires_at} />
       )}
-      {isCurrentPlan ? (
-        <CancelSubscription plan_id={plan_id} />
-      ) : (
-        <PurchaseSubscription
-          currentPlan={isCurrentPlan}
-          plan_id={plan_id}
-        />
-      )}
-    </Section>
+
+      <RenderButton />
+    </View>
   )
 }
 
@@ -53,7 +54,7 @@ export function SubscriptionPlanName({
 }) {
   return (
     <View
-      className='px-2 py-0.5 rounded-lg'
+      className='px-3 py-1 rounded-xl'
       style={{
         backgroundColor: plan.metadata.colors.bg_color,
       }}
@@ -89,7 +90,12 @@ export function SubscriptionDescription({
               <Asterisk className='text-text-secondary size-3 stroke-2' />
             </View>
             <View className='flex-1'>
-              <GoogleSansText key={index}>{item}</GoogleSansText>
+              <GoogleSansText
+                variant='medium'
+                key={index}
+              >
+                {item}
+              </GoogleSansText>
             </View>
           </View>
         )
@@ -121,25 +127,30 @@ export function SubscriptionExpiry({
   )
 }
 
-function PurchaseSubscription({
-  currentPlan,
-  plan_id,
-}: {
-  currentPlan: boolean
-  plan_id: string
-}) {
+function SelectSubscriptionPressable({ plan_id }: { plan_id: string }) {
+  const onPurchasePress = () => {
+    router.push({
+      pathname: '/(protected)/settings/subscription/purchase-plan',
+      params: {
+        plan_id,
+      },
+    })
+  }
+
   return (
     <Pressable
-      className={`flex-row items-center gap-2 justify-center p-3 rounded-xl bg-brand-primary ${
-        currentPlan ? 'opacity-50' : ''
-      }`}
+      className='flex-row items-center gap-2 justify-center p-3 rounded-xl bg-brand-primary'
+      onPress={onPurchasePress}
     >
       <GoogleSansText
         variant='semi-bold'
         className='text-neutral-100 text-lg'
       >
-        {currentPlan ? 'Active plan' : 'Select plan'}
+        Select plan
       </GoogleSansText>
+      <View className='size-4 justify-center items-center'>
+        <Gem className='text-neutral-100 size-4' />
+      </View>
     </Pressable>
   )
 }
@@ -153,6 +164,9 @@ function CancelSubscription({ plan_id }: { plan_id: string }) {
       >
         Cancel subscription
       </GoogleSansText>
+      <View className='size-4 justify-center items-center'>
+        <X className='text-neutral-100 size-4' />
+      </View>
     </Pressable>
   )
 }
@@ -177,4 +191,4 @@ export function SubscriptionPrice({
   )
 }
 
-ensureInterop([CalendarClock, Asterisk])
+ensureInterop([CalendarClock, Asterisk, X, Gem])

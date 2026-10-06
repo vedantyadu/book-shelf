@@ -36,6 +36,7 @@ class Colors(BaseModel):
 
 
 class Metadata(BaseModel):
+    razorpay_plan_id: str
     colors: Colors
     description: list[str]
 
@@ -83,6 +84,7 @@ _plans_data = {
             "price": [{"amount": 0, "currency": "INR"}],
         },
         "metadata": {
+            "razorpay_plan_id": "",
             "colors": {
                 "bg_color": "#e5e5e5",
                 "text_color": "#262626",
@@ -103,11 +105,12 @@ _plans_data = {
         ],
         "billing_cycle": {
             "cycle": "monthly",
-            "price": [{"amount": 100, "currency": "INR"}],
+            "price": [{"amount": 50, "currency": "INR"}],
         },
         "metadata": {
+            "razorpay_plan_id": "plan_TkkIAteXdqYRsp",
             "colors": {
-                "bg_color": "#f9fafb",
+                "bg_color": "#22c55e",
                 "text_color": "#0f172a",
             },
             "description": [
@@ -131,8 +134,9 @@ _plans_data = {
             "price": [{"amount": 150, "currency": "INR"}],
         },
         "metadata": {
+            "razorpay_plan_id": "plan_TkkKyizp47RKbm",
             "colors": {
-                "bg_color": "#f9fafb",
+                "bg_color": "#eab308",
                 "text_color": "#0f172a",
             },
             "description": [
@@ -156,8 +160,9 @@ _plans_data = {
             "price": [{"amount": 1500, "currency": "INR"}],
         },
         "metadata": {
+            "razorpay_plan_id": "plan_TkkLkg7Nmbcg3y",
             "colors": {
-                "bg_color": "#f9fafb",
+                "bg_color": "#c084fc",
                 "text_color": "#0f172a",
             },
             "description": [
