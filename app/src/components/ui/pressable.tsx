@@ -13,13 +13,15 @@ export function DefaultPressable({
   Icon,
   disabled = false,
   className,
+  children,
 }: {
   variant?: DefaultPressableVariants
-  text: string
+  text?: string
   onPress: () => void
   Icon?: ComponentType<{ className?: string }>
   disabled?: boolean
   className?: string
+  children?: React.ReactNode
 }) {
   let bg_color: string
   let text_color: string
@@ -48,6 +50,27 @@ export function DefaultPressable({
       break
   }
 
+  const InnerContent = () => {
+    if (children) {
+      return children
+    }
+    return (
+      <>
+        <GoogleSansText
+          variant='semi-bold'
+          className={`text-lg ${text_color}`}
+        >
+          {text}
+        </GoogleSansText>
+        {Icon && (
+          <View className='size-4 justify-center items-center'>
+            <Icon className={`size-4 ${icon_color}`} />
+          </View>
+        )}
+      </>
+    )
+  }
+
   return (
     <Pressable
       className={twMerge(
@@ -57,17 +80,7 @@ export function DefaultPressable({
       onPress={onPress}
       disabled={disabled}
     >
-      <GoogleSansText
-        variant='semi-bold'
-        className={`text-lg ${text_color}`}
-      >
-        {text}
-      </GoogleSansText>
-      {Icon && (
-        <View className='size-4 justify-center items-center'>
-          <Icon className={`size-4 ${icon_color}`} />
-        </View>
-      )}
+      <InnerContent />
     </Pressable>
   )
 }

@@ -77,11 +77,10 @@ async def logout(
 @auth_router.post("/refresh", response_model=RefreshTokenResponse)
 async def refresh(body: RefreshTokenRequest, db: AsyncSession = Depends(get_db)):
     token = await db.scalar(
-        select(RefreshToken).where(
-            RefreshToken.token == hash_string(body.refresh_token),
-            RefreshToken.expires_at > utcnow(),
-            RefreshToken.revoked == False,
-        )
+        select(RefreshToken)
+        .where(RefreshToken.token == hash_string(body.refresh_token))
+        .where(RefreshToken.expires_at > utcnow())
+        .where(RefreshToken.revoked == False)
     )
 
     if not token:

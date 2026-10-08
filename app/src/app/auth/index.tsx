@@ -1,7 +1,9 @@
+import { SafeScreen } from '@/components/app/app-layout'
 import { GoogleSansText } from '@/components/ui/fonts'
+import { DefaultPressable } from '@/components/ui/pressable'
 import { Image } from 'expo-image'
 import { openAuthSessionAsync } from 'expo-web-browser'
-import { Pressable, View } from 'react-native'
+import { View } from 'react-native'
 
 const appIcon = require('@/assets/images/bookshelf-icon.svg')
 const googleLogo = require('@/assets/images/google-icon.svg')
@@ -32,25 +34,31 @@ export default function LoginScreen() {
   }
 
   return (
-    <View className='flex-1 items-center justify-center bg-bg-primary'>
-      <View className='mb-16 items-center'>
-        <Image
-          source={appIcon}
-          style={{ height: 128, width: 128 }}
-          contentFit='contain'
-        />
+    <SafeScreen>
+      <View className='flex-1 items-center justify-center gap-16 p-4'>
+        <View className='items-center justify-center size-32'>
+          <Image
+            source={appIcon}
+            style={{ height: 128, width: 128 }}
+            contentFit='contain'
+          />
+        </View>
+        <View className='items-center gap-4'>
+          <DefaultPressable
+            variant='primary'
+            onPress={googleLogin}
+          >
+            <Image
+              source={googleLogo}
+              style={{ width: 16, height: 16 }}
+              contentFit='contain'
+            />
+            <GoogleSansText variant='medium'>
+              Continue with Google
+            </GoogleSansText>
+          </DefaultPressable>
+        </View>
       </View>
-      <Pressable
-        className='flex-row items-center gap-4 px-4 py-4 bg-bg-secondary rounded-xl'
-        onPress={googleLogin}
-      >
-        <Image
-          source={googleLogo}
-          style={{ width: 20, height: 20 }}
-          contentFit='contain'
-        />
-        <GoogleSansText variant='medium'>Continue with Google</GoogleSansText>
-      </Pressable>
-    </View>
+    </SafeScreen>
   )
 }
