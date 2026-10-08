@@ -2,16 +2,15 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.subscription_plans import BillingCycleEnum
 from app.db.base import Base
 from app.utils.datetime import utcnow
 
 if TYPE_CHECKING:
-    from app.db.models.payment import Payment
+    from app.db.models.razorpay_subscription import RazorpaySubscription
     from app.db.models.user import User
 
 
@@ -24,8 +23,14 @@ class Subscription(Base):
     owner_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id")
     )
+
+    plan_id: Mapped[str] = mapped_column()
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    plan_id: Mapped[str] = mapped_column(String)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    renews_on: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow
     )
@@ -34,6 +39,6 @@ class Subscription(Base):
     )
 
     owner: Mapped["User"] = relationship(back_populates="subscriptions")
-    payment: Mapped["Payment"] = relationship(
+    razorpay_subscription: Mapped["RazorpaySubscription"] = relationship(
         back_populates="subscription", cascade="all, delete-orphan"
     )

@@ -5,11 +5,9 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.middleware.verify_token import verify_token
-from app.core.subscription_plans import plans
 from app.core.tokens import generate_jwt, generate_refresh_token
 from app.db.base import get_db
 from app.db.models.refresh_token import RefreshToken
-from app.db.models.subscription import Subscription
 from app.db.models.user import User
 from app.schemas.auth import (
     GoogleLoginRequest,
@@ -19,7 +17,7 @@ from app.schemas.auth import (
     RefreshTokenRequest,
     RefreshTokenResponse,
 )
-from app.services.google_auth import get_google_token, get_google_user_data
+from app.services.google_auth import google_auth_service
 from app.utils.datetime import utcnow
 from app.utils.hash import hash_string
 
@@ -29,8 +27,8 @@ auth_router = APIRouter(prefix="/auth")
 @auth_router.post("/google", response_model=GoogleLoginResponse)
 async def login(body: GoogleLoginRequest, db: AsyncSession = Depends(get_db)):
 
-    token = await get_google_token(body.code)
-    data = await get_google_user_data(token)
+    token = await google_auth_service.get_google_token(body.code)
+    data = await google_auth_service.get_google_user_data(token)
 
     google_id = data["sub"]
     user_id = await db.scalar(select(User.id).where(User.google_id == google_id))
@@ -40,13 +38,6 @@ async def login(body: GoogleLoginRequest, db: AsyncSession = Depends(get_db)):
         db.add(user)
         await db.flush()
         user_id = user.id
-
-        default_plan_id = next(id for id in plans if plans[id].default)
-        subscription = Subscription(
-            owner_id=user_id,
-            plan_id=default_plan_id,
-        )
-        db.add(subscription)
 
     access_token = generate_jwt(
         {"id": str(user_id), "exp": utcnow() + timedelta(seconds=180)}

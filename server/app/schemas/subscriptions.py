@@ -5,22 +5,18 @@ from pydantic import BaseModel
 from app.core.subscription_plans import SubscriptionPlan
 
 
-class Subscription(BaseModel):
+class SubscriptionMeResponse(BaseModel):
+    id: str
     plan: SubscriptionPlan
-    expires_at: int
+    renews_on: int | None
 
 
-class RazorpayPayment(BaseModel):
-    provider: Literal["razorpay"]
-    razorpay_order_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
+class PurchaseSubscriptionResponse(BaseModel):
+    subscription_id: str
+    key: str
 
 
 class VerifySubscriptionRequest(BaseModel):
-    id: str
-    payment: RazorpayPayment
-
-
-class MeSubscriptionResponse(BaseModel):
-    subscription: Subscription | None
+    razorpay_subscription_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
