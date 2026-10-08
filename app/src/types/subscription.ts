@@ -44,6 +44,6 @@ export type SubscriptionPlansDataType = {
 export type SubscriptionType = {
   id: string
   plan: SubscriptionPlanType
-  expires_at: number | null
+  renews_on: number | null
   billing_cycle: BillingCycleEnum
 }

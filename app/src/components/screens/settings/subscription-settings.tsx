@@ -1,15 +1,15 @@
-import { GoogleSansText } from '@/components/ui/fonts'
+import { DefaultPressable } from '@/components/ui/pressable'
 import { Section } from '@/components/ui/section'
 import { useAppContext } from '@/context/app-context'
 import { ensureInterop } from '@/utils/icon-interop'
 import { router } from 'expo-router'
 import { ArrowRight } from 'lucide-react-native'
-import { Pressable, View } from 'react-native'
+import { View } from 'react-native'
 import {
   SubscriptionDescription,
-  SubscriptionExpiry,
   SubscriptionPlanName,
   SubscriptionPrice,
+  SubscriptionRenewal,
 } from '../subscription/subscription-item'
 
 export function SubscriptionSettings() {
@@ -29,7 +29,7 @@ export function SubscriptionSettings() {
           <SubscriptionPrice billing_cycle={subscription.plan.billing_cycle} />
         </View>
         <SubscriptionDescription plan={subscription.plan} />
-        <SubscriptionExpiry timestamp={subscription.expires_at} />
+        <SubscriptionRenewal timestamp={subscription.renews_on} />
         <ManageSubscriptionPressable />
       </View>
     </Section>
@@ -42,20 +42,11 @@ function ManageSubscriptionPressable() {
   }
 
   return (
-    <Pressable
-      className='flex-row items-center gap-2 justify-center p-3 bg-brand-primary rounded-xl'
+    <DefaultPressable
+      text='Manage subscription'
       onPress={navigateToSubscriptions}
-    >
-      <GoogleSansText
-        variant='semi-bold'
-        className='text-neutral-100 text-lg'
-      >
-        Manage subscription
-      </GoogleSansText>
-      <View className='size-4 justify-center items-center'>
-        <ArrowRight className='text-neutral-100 size-4' />
-      </View>
-    </Pressable>
+      Icon={ArrowRight}
+    />
   )
 }
 

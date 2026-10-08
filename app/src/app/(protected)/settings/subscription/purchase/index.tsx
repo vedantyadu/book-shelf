@@ -27,21 +27,28 @@ export default function PurchasePlanScreen() {
     fetchPlanDetails()
   }, [])
 
+  const ScreenContent = () => {
+    switch (loading) {
+      case true:
+        return <LoadScreen />
+      case false:
+        return (
+          <View className='px-4'>
+            {plan && (
+              <PurchaseSubscription
+                plan={plan}
+                plan_id={plan_id}
+              />
+            )}
+          </View>
+        )
+    }
+  }
+
   return (
     <SafeScreen>
       <TopBar title='Purchase Subscription' />
-      {loading ? (
-        <LoadScreen />
-      ) : (
-        <View className='px-4'>
-          {plan && (
-            <PurchaseSubscription
-              plan={plan}
-              plan_id={plan_id}
-            />
-          )}
-        </View>
-      )}
+      <ScreenContent />
       <BottomBar />
     </SafeScreen>
   )

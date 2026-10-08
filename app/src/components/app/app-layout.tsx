@@ -43,18 +43,20 @@ export function TopBar({ title }: { title: string }) {
 
   return (
     <View
-      className='bg-bg-primary'
+      className='bg-bg-primary justify-end pb-3'
       style={{
-        paddingTop: inset.top,
+        height: inset.top + 44,
       }}
     >
-      <View className='flex-row items-center gap-4 h-12 px-4 pb-4'>
-        <Pressable
-          className='size-6'
-          onPress={goBack}
-        >
-          <ArrowLeft className='text-text-secondary size-6' />
-        </Pressable>
+      <View className='flex-row items-center gap-4 px-4'>
+        <View className='items-center justify-center size-6'>
+          <Pressable
+            className='size-6'
+            onPress={goBack}
+          >
+            <ArrowLeft className='text-text-secondary size-6' />
+          </Pressable>
+        </View>
         <GoogleSansText
           variant='semi-bold'
           className='text-2xl'

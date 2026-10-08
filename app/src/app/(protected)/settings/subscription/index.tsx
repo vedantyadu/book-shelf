@@ -49,7 +49,7 @@ export default function SubscriptionScreen() {
                 <SubscriptionItem
                   plan={userSubscription.subscription?.plan}
                   plan_id={userSubscription.subscription?.id}
-                  expires_at={userSubscription.subscription?.expires_at}
+                  renews_on={userSubscription.subscription?.renews_on}
                 />
               </Section>
             )}
@@ -61,7 +61,7 @@ export default function SubscriptionScreen() {
                     plan_id={plan_id}
                   />
                   {index !== availablePlans.length - 1 && (
-                    <View className='h-px bg-icon mt-4 mb-2 text-green-' />
+                    <View className='h-px bg-bg-highlight mt-4 mb-2' />
                   )}
                 </View>
               ))}

@@ -1,12 +1,12 @@
-import { GoogleSansText } from '@/components/ui/fonts'
+import { DefaultPressable } from '@/components/ui/pressable'
 import { Section } from '@/components/ui/section'
-import { api } from '@/lib/api'
 import { SubscriptionPlanType } from '@/types/subscription'
 import { ensureInterop } from '@/utils/icon-interop'
-import { Check } from 'lucide-react-native'
-import { Pressable, View } from 'react-native'
-import RazorpayCheckout, { CheckoutOptions } from 'react-native-razorpay'
+import { router } from 'expo-router'
+import { Gem } from 'lucide-react-native'
+import { View } from 'react-native'
 import {
+  SubscriptionAlert,
   SubscriptionDescription,
   SubscriptionPlanName,
   SubscriptionPrice,
@@ -21,55 +21,37 @@ export function PurchaseSubscription({
 }) {
   return (
     <Section>
-      {plan && (
-        <View className='gap-4'>
-          <View className='flex-row items-center justify-between'>
-            <SubscriptionPlanName plan={plan} />
-            <SubscriptionPrice billing_cycle={plan.billing_cycle} />
-          </View>
-          <SubscriptionDescription plan={plan} />
-          <PurchasePlanPressable plan_id={plan_id} />
+      <View className='gap-4'>
+        <View className='flex-row items-center justify-between'>
+          <SubscriptionPlanName plan={plan} />
+          <SubscriptionPrice billing_cycle={plan.billing_cycle} />
         </View>
-      )}
+        <SubscriptionDescription plan={plan} />
+        <SubscriptionAlert text='Your current subscription will be cancelled upon purchasing this plan.' />
+        <PurchasePlanPressable plan_id={plan_id} />
+      </View>
     </Section>
   )
 }
 
 function PurchasePlanPressable({ plan_id }: { plan_id: string }) {
-  const purchasePlan = async () => {
-    try {
-      const res = await api.post(`/subscriptions/plans/${plan_id}/purchase`)
-
-      const options = {
-        subscription_id: res.data.subscription_id,
-        key: res.data.key,
-        name: 'Bookshelf',
-        description: res.data.plan_name,
-        theme: { color: '#3b82f6' },
-      }
-
-      RazorpayCheckout.open(options as CheckoutOptions)
-    } catch (err) {
-      console.log(err)
-    }
+  const purchasePlan = () => {
+    router.push({
+      pathname: '/(protected)/settings/subscription/purchase/payment',
+      params: {
+        plan_id: plan_id,
+      },
+    })
   }
 
   return (
-    <Pressable
-      className='flex-row items-center gap-2 justify-center p-3 bg-brand-primary rounded-xl'
+    <DefaultPressable
+      variant='brand'
+      text='Proceed to payment'
       onPress={purchasePlan}
-    >
-      <GoogleSansText
-        variant='semi-bold'
-        className='text-neutral-100 text-lg'
-      >
-        Purchase plan
-      </GoogleSansText>
-      <View className='size-4 items-center justify-center'>
-        <Check className='text-neutral-100 size-4' />
-      </View>
-    </Pressable>
+      Icon={Gem}
+    />
   )
 }
 
-ensureInterop([Check])
+ensureInterop([Gem])

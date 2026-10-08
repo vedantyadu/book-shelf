@@ -1,31 +1,42 @@
 import { GoogleSansText } from '@/components/ui/fonts'
+import { DefaultPressable } from '@/components/ui/pressable'
 import { useAppContext } from '@/context/app-context'
 import { SubscriptionType } from '@/types/subscription'
 import { formatDateFromSecondsTimestamp } from '@/utils/date-time'
 import { ensureInterop } from '@/utils/icon-interop'
 import { router } from 'expo-router'
-import { Asterisk, CalendarClock, Gem, X } from 'lucide-react-native'
-import { Pressable, View } from 'react-native'
+import {
+  ArrowRight,
+  Asterisk,
+  CalendarClock,
+  CircleAlert,
+  X,
+} from 'lucide-react-native'
+import { View } from 'react-native'
 
 export function SubscriptionItem({
   plan,
   plan_id,
-  expires_at,
+  renews_on,
 }: {
   plan: SubscriptionType['plan']
   plan_id: string
-  expires_at?: SubscriptionType['expires_at']
+  renews_on?: SubscriptionType['renews_on']
 }) {
   const { userSubscription } = useAppContext()
 
   const isCurrentPlan = userSubscription.subscription?.id === plan_id
 
   const RenderButton = () => {
-    if (plan.default) {
-      return null
-    }
     if (isCurrentPlan) {
-      return <CancelSubscription plan_id={plan_id} />
+      if (plan.default) {
+        return null
+      }
+      return <CancelSubscription />
+    }
+
+    if (plan.default) {
+      return <SubscriptionAlert text='This is the default plan.' />
     }
     return <SelectSubscriptionPressable plan_id={plan_id} />
   }
@@ -38,11 +49,22 @@ export function SubscriptionItem({
       </View>
       <SubscriptionDescription plan={plan} />
 
-      {expires_at !== undefined && (
-        <SubscriptionExpiry timestamp={expires_at} />
-      )}
+      {renews_on !== undefined && <SubscriptionRenewal timestamp={renews_on} />}
 
       <RenderButton />
+    </View>
+  )
+}
+
+export function SubscriptionAlert({ text }: { text: string }) {
+  return (
+    <View className='flex-row gap-2'>
+      <View className='mt-0.5'>
+        <CircleAlert className='text-amber-500 size-4' />
+      </View>
+      <GoogleSansText className='text-sm text-text-secondary flex-1'>
+        {text}
+      </GoogleSansText>
     </View>
   )
 }
@@ -104,24 +126,37 @@ export function SubscriptionDescription({
   )
 }
 
-export function SubscriptionExpiry({
+export function SubscriptionRenewal({
   timestamp,
 }: {
-  timestamp: SubscriptionType['expires_at']
+  timestamp: SubscriptionType['renews_on']
 }) {
+  const getRenewalText = () => {
+    if (!timestamp) {
+      return { text: 'Valid', value: 'Forever' }
+    }
+
+    return {
+      text: 'Auto-renews on',
+      value: formatDateFromSecondsTimestamp(timestamp),
+    }
+  }
+
+  const { text, value } = getRenewalText()
+
   return (
     <View className='flex-row items-center gap-1'>
       <View className='items-center justify-center size-4'>
         <CalendarClock className='text-text-secondary size-4' />
       </View>
       <GoogleSansText className='text-sm text-text-secondary'>
-        {timestamp ? 'Valid until' : 'Valid'}
+        {text}
       </GoogleSansText>
       <GoogleSansText
         variant='semi-bold'
         className='text-sm'
       >
-        {timestamp ? formatDateFromSecondsTimestamp(timestamp) : 'Forever'}
+        {value}
       </GoogleSansText>
     </View>
   )
@@ -130,7 +165,7 @@ export function SubscriptionExpiry({
 function SelectSubscriptionPressable({ plan_id }: { plan_id: string }) {
   const onPurchasePress = () => {
     router.push({
-      pathname: '/(protected)/settings/subscription/purchase-plan',
+      pathname: '/(protected)/settings/subscription/purchase',
       params: {
         plan_id,
       },
@@ -138,36 +173,26 @@ function SelectSubscriptionPressable({ plan_id }: { plan_id: string }) {
   }
 
   return (
-    <Pressable
-      className='flex-row items-center gap-2 justify-center p-3 rounded-xl bg-brand-primary'
+    <DefaultPressable
+      text='Change plan'
       onPress={onPurchasePress}
-    >
-      <GoogleSansText
-        variant='semi-bold'
-        className='text-neutral-100 text-lg'
-      >
-        Select plan
-      </GoogleSansText>
-      <View className='size-4 justify-center items-center'>
-        <Gem className='text-neutral-100 size-4' />
-      </View>
-    </Pressable>
+      Icon={ArrowRight}
+    />
   )
 }
 
-function CancelSubscription({ plan_id }: { plan_id: string }) {
+function CancelSubscription() {
+  const onCancelPress = async () => {
+    router.push('/(protected)/settings/subscription/cancel')
+  }
+
   return (
-    <Pressable className='flex-row items-center gap-2 justify-center p-3 rounded-xl bg-red-500'>
-      <GoogleSansText
-        variant='semi-bold'
-        className='text-neutral-100 text-lg'
-      >
-        Cancel subscription
-      </GoogleSansText>
-      <View className='size-4 justify-center items-center'>
-        <X className='text-neutral-100 size-4' />
-      </View>
-    </Pressable>
+    <DefaultPressable
+      variant='destructive'
+      text='Cancel subscription'
+      onPress={onCancelPress}
+      Icon={X}
+    />
   )
 }
 
@@ -191,4 +216,4 @@ export function SubscriptionPrice({
   )
 }
 
-ensureInterop([CalendarClock, Asterisk, X, Gem])
+ensureInterop([CalendarClock, Asterisk, X, ArrowRight, CircleAlert])

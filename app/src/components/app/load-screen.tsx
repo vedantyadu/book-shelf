@@ -1,20 +1,13 @@
-import { Image } from 'expo-image'
+import { BRAND_PRIMARY_COLOR } from '@/utils/themes'
+import { CircularProgressIndicator, Host } from '@expo/ui/jetpack-compose'
 import { View } from 'react-native'
-
-const appIcon = require('@/assets/images/bookshelf-icon.svg')
 
 export function LoadScreen() {
   return (
     <View className='flex-1 items-center justify-center bg-bg-primary'>
-      <Image
-        source={appIcon}
-        className='animate-pulse'
-        style={{
-          width: 128,
-          height: 128,
-        }}
-        contentFit='contain'
-      />
+      <Host matchContents>
+        <CircularProgressIndicator color={BRAND_PRIMARY_COLOR} />
+      </Host>
     </View>
   )
 }
