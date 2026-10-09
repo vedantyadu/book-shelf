@@ -18,7 +18,7 @@ export function HomeScreenTopBar() {
           variant='bold'
           className='text-3xl'
         >
-          Your Library
+          Your books
         </GoogleSansText>
         <Pressable
           className='items-center justify-center p-2 rounded-full'
@@ -34,6 +34,10 @@ export function HomeScreenTopBar() {
 export function AddBookPressable() {
   const insets = useSafeAreaInsets()
 
+  const newBook = () => {
+    router.push('/(protected)/new-book')
+  }
+
   return (
     <View
       className='absolute  left-4 right-4'
@@ -42,10 +46,10 @@ export function AddBookPressable() {
       }}
     >
       <DefaultPressable
-        text='Add Book'
+        text='New book'
         Icon={BookPlus}
         variant='brand'
-        onPress={() => {}}
+        onPress={newBook}
       />
     </View>
   )

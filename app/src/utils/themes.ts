@@ -1,7 +1,7 @@
 import { vars } from 'nativewind'
 
-export const LIGHT_BG_PRIMARY_COLOR = '#fafafa'
-export const DARK_BG_PRIMARY_COLOR = '#0a0a0a'
+export const LIGHT_BG_PRIMARY_COLOR = '#fafafaff'
+export const DARK_BG_PRIMARY_COLOR = '#0a0a0aff'
 
 export const BRAND_PRIMARY_COLOR = '#4e56c0'
 
@@ -23,7 +23,7 @@ export const themes = {
     '--color-bg-secondary': '#171717',
     '--color-bg-highlight': '#262626',
     '--color-text-primary': '#fafafa',
-    '--color-text-secondary': '#e5e5e5',
+    '--color-text-secondary': '#d4d4d4',
     '--color-icon': '#525252',
     '--color-brand-primary': BRAND_PRIMARY_COLOR,
   }),

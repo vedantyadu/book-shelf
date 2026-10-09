@@ -2,6 +2,7 @@ import { BottomBar, SafeScreen, TopBar } from '@/components/app/app-layout'
 import { LoadScreen } from '@/components/app/load-screen'
 import { SubscriptionItem } from '@/components/screens/subscription/subscription-item'
 import { Section } from '@/components/ui/section'
+import { Separator } from '@/components/ui/separator'
 import { useAppContext } from '@/context/app-context'
 import { api } from '@/lib/api'
 import { SubscriptionPlansDataType } from '@/types/subscription'
@@ -61,7 +62,7 @@ export default function SubscriptionScreen() {
                     plan_id={plan_id}
                   />
                   {index !== availablePlans.length - 1 && (
-                    <View className='h-px bg-bg-highlight mt-4 mb-2' />
+                    <Separator className='mt-4 mb-2' />
                   )}
                 </View>
               ))}

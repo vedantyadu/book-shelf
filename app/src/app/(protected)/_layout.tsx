@@ -1,6 +1,5 @@
 import { LoadScreen } from '@/components/app/load-screen'
 import { useAppContext } from '@/context/app-context'
-import { ScanContextProvider } from '@/context/scan-context'
 import { Redirect, Stack } from 'expo-router'
 
 export default function ProtectedLayout() {
@@ -13,16 +12,17 @@ export default function ProtectedLayout() {
     return <Redirect href='/auth' />
   }
   return (
-    <ScanContextProvider>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-        }}
-      >
-        <Stack.Screen name='index' />
-        <Stack.Screen name='settings' />
-        <Stack.Screen name='scan-result' />
-      </Stack>
-    </ScanContextProvider>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: {
+          backgroundColor: 'transparent',
+        },
+      }}
+    >
+      <Stack.Screen name='index' />
+      <Stack.Screen name='settings' />
+      <Stack.Screen name='new-book' />
+    </Stack>
   )
 }

@@ -1,3 +1,4 @@
+import TextAlert from '@/components/app/alert'
 import { GoogleSansText } from '@/components/ui/fonts'
 import { DefaultPressable } from '@/components/ui/pressable'
 import { useAppContext } from '@/context/app-context'
@@ -57,16 +58,7 @@ export function SubscriptionItem({
 }
 
 export function SubscriptionAlert({ text }: { text: string }) {
-  return (
-    <View className='flex-row gap-2'>
-      <View className='mt-0.5'>
-        <CircleAlert className='text-amber-500 size-4' />
-      </View>
-      <GoogleSansText className='text-sm text-text-secondary flex-1'>
-        {text}
-      </GoogleSansText>
-    </View>
-  )
+  return <TextAlert text={text} />
 }
 
 export function SubscriptionPlanName({

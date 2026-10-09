@@ -1,31 +1,46 @@
 import { createContext, useContext, useState } from 'react'
-import { ScanResult } from '../../modules/page-scan-module/src/PageScanModule'
 
-type ScanContextType = {
-  scanResult: ScanResult | null
-  setScanResult: (result: ScanResult | null) => void
+export type PageStateType = 'processing' | 'ready' | 'error'
+
+export type PageType = {
+  id: string
+  uri: string
+  text: string | null
+  state: PageStateType
 }
 
-const ScanContext = createContext<ScanContextType | undefined>(undefined)
+type ScanContextType = {
+  pages: PageType[]
+  setPages: React.Dispatch<React.SetStateAction<PageType[]>>
+  selectedPages: string[]
+  setSelectedPages: React.Dispatch<React.SetStateAction<string[]>>
+}
 
-export function ScanContextProvider({
+const NewBookContext = createContext<ScanContextType | undefined>(undefined)
+
+export function NewBookContextProvider({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const [scanResult, setScanResult] = useState<ScanResult | null>(null)
+  const [pages, setPages] = useState<PageType[]>([])
+  const [selectedPages, setSelectedPages] = useState<string[]>([])
 
   return (
-    <ScanContext.Provider value={{ scanResult, setScanResult }}>
+    <NewBookContext.Provider
+      value={{ pages, setPages, selectedPages, setSelectedPages }}
+    >
       {children}
-    </ScanContext.Provider>
+    </NewBookContext.Provider>
   )
 }
 
-export function useScanContext() {
-  const context = useContext(ScanContext)
+export function useNewBookContext() {
+  const context = useContext(NewBookContext)
   if (context === undefined) {
-    throw new Error('useScanContext must be used within a ScanContextProvider')
+    throw new Error(
+      'useNewBookContext must be used within a NewBookContextProvider',
+    )
   }
   return context
 }
