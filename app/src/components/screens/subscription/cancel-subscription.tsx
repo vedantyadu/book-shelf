@@ -45,7 +45,7 @@ export function CancelSubscriptionInitialScreen({
           variant='semi-bold'
           className='text-2xl text-center'
         >
-          Are you sure you want to cancel your subscription?
+          Do you want to cancel your subscription?
         </GoogleSansText>
         <View className='gap-2'>
           <DefaultPressable
@@ -92,12 +92,20 @@ export function CancelSubscriptionErrorScreen() {
     <View className='flex-1 items-center justify-center gap-8 p-4'>
       <CircleAlert className='text-red-400 size-24' />
       <View className='items-center gap-4'>
-        <GoogleSansText
-          variant='semi-bold'
-          className='text-2xl text-center'
-        >
-          Failed to cancel subscription.
-        </GoogleSansText>
+        <View className='items-center'>
+          <GoogleSansText
+            variant='semi-bold'
+            className='text-2xl'
+          >
+            Failed to cancel subscription.
+          </GoogleSansText>
+          <GoogleSansText
+            variant='regular'
+            className='text-center'
+          >
+            Please try again.
+          </GoogleSansText>
+        </View>
         <DefaultPressable
           text='Go back'
           onPress={goBack}
@@ -117,12 +125,20 @@ export function CancelSubscriptionSuccessScreen() {
     <View className='flex-1 items-center justify-center gap-8 p-4'>
       <RefreshCwOff className='text-icon size-24' />
       <View className='items-center gap-4'>
-        <GoogleSansText
-          variant='semi-bold'
-          className='text-2xl text-center'
-        >
-          Subscription cancelled successfully.
-        </GoogleSansText>
+        <View className='items-center'>
+          <GoogleSansText
+            variant='semi-bold'
+            className='text-2xl'
+          >
+            Subscription cancelled successfully.
+          </GoogleSansText>
+          <GoogleSansText
+            variant='regular'
+            className='text-center'
+          >
+            You are now on the free tier.
+          </GoogleSansText>
+        </View>
         <DefaultPressable
           text='Back to home'
           onPress={backToHome}

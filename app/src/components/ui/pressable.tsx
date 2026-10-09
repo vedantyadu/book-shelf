@@ -4,7 +4,7 @@ import { twMerge } from 'tailwind-merge'
 import { GoogleSansText } from './fonts'
 
 type DefaultPressableVariants =
-  'primary' | 'secondary' | 'destructive' | 'brand'
+  'primary' | 'secondary' | 'destructive' | 'brand' | 'warning'
 
 export function DefaultPressable({
   variant = 'primary',
@@ -42,6 +42,11 @@ export function DefaultPressable({
       bg_color = 'bg-brand-primary'
       text_color = 'text-neutral-100'
       icon_color = 'text-neutral-100'
+      break
+    case 'warning':
+      bg_color = 'bg-bg-highlight'
+      text_color = 'text-amber-500 dark:text-amber-400'
+      icon_color = 'text-amber-500 dark:text-amber-400'
       break
     default:
       bg_color = 'bg-bg-highlight'

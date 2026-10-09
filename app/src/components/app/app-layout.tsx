@@ -8,10 +8,20 @@ import { GoogleSansText } from '../ui/fonts'
 
 const BOTTOM_GRADIENT_HEIGHT = 0
 
-export function SafeScreen({ children }: PropsWithChildren) {
+export function SafeScreen({
+  children,
+  topPadding,
+}: PropsWithChildren & { topPadding?: boolean }) {
   const insets = useSafeAreaInsets()
 
-  return <View className='relative flex-1 bg-bg-primary'>{children}</View>
+  return (
+    <View
+      className='relative flex-1 bg-bg-primary'
+      style={{ paddingTop: topPadding ? insets.top : 0 }}
+    >
+      {children}
+    </View>
+  )
 }
 
 export function BottomBar({ children }: PropsWithChildren) {

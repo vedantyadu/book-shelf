@@ -15,12 +15,14 @@ export function Logout() {
   const { setAuth } = useAppContext()
 
   const handleLogout = async () => {
-    const refresh_token = await getRefreshToken()
-    await api.post('/auth/logout', { refresh_token: refresh_token })
-    setAuth({ loading: false, user: null })
-    await removeAccessToken()
-    await removeRefreshToken()
-    router.replace('/auth')
+    try {
+      const refresh_token = await getRefreshToken()
+      await api.post('/auth/logout', { refresh_token: refresh_token })
+      setAuth({ loading: false, user: null })
+      await removeAccessToken()
+      await removeRefreshToken()
+      router.replace('/auth')
+    } catch (err) {}
   }
 
   return (

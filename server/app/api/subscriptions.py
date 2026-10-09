@@ -211,7 +211,7 @@ async def cancel_subscription(request: Request, db: AsyncSession = Depends(get_d
             )
 
         res = await razorpay_service.cancel_subscription(
-            razorpay_subscription.razorpay_subscription_id, False
+            razorpay_subscription.razorpay_subscription_id, True
         )
 
         subscription.active = False

@@ -76,7 +76,7 @@ export function SubscriptionPlanName({
 }) {
   return (
     <View
-      className='px-3 py-1 rounded-xl'
+      className='px-3 py-1 rounded-full'
       style={{
         backgroundColor: plan.metadata.colors.bg_color,
       }}

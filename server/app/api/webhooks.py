@@ -54,7 +54,11 @@ async def razorpay_webhook(
         if body["event"] == "subscription.charged":
             subscription.active = True
             subscription.renews_on = timestamp_to_datetime(renews_on)
-        elif body["event"] == "subscription.cancelled":
+        elif body["event"] in [
+            "subscription.cancelled",
+            "subscription.pending",
+            "subscription.halted",
+        ]:
             subscription.active = False
             subscription.renews_on = None
 

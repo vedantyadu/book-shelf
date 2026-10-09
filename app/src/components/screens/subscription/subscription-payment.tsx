@@ -10,14 +10,25 @@ import {
 } from '@/utils/themes'
 import { CircularProgressIndicator, Host } from '@expo/ui/jetpack-compose'
 import { router, useLocalSearchParams } from 'expo-router'
-import { BanknoteCheck, BanknoteX, Undo2 } from 'lucide-react-native'
+import {
+  ArrowRight,
+  BanknoteCheck,
+  BanknoteX,
+  CircleAlert,
+  Undo2,
+} from 'lucide-react-native'
 import { useColorScheme } from 'nativewind'
 import { useEffect } from 'react'
 import { View } from 'react-native'
 import RazorpayCheckout, { CheckoutOptions } from 'react-native-razorpay'
 
 export type SubscriptionPaymentScreenStateType =
-  'processing' | 'success' | 'failure'
+  | 'processing'
+  | 'success'
+  | 'failure'
+  | 'warning'
+  | 'cancel-processing'
+  | 'cancel-failure'
 
 export function SubscriptionPaymentSuccessScreen() {
   const backToHome = () => {
@@ -165,4 +176,57 @@ export function SubscriptionPaymentProcessingScreen({
   )
 }
 
-ensureInterop([BanknoteCheck, BanknoteX, Undo2])
+export function SubscriptionPaymentWarningScreen({
+  setSubscriptionPaymentState,
+}: {
+  setSubscriptionPaymentState: React.Dispatch<
+    React.SetStateAction<SubscriptionPaymentScreenStateType>
+  >
+}) {
+  const { userSubscription, setUserSubscription } = useAppContext()
+
+  const cancelSubscription = async () => {
+    try {
+      setSubscriptionPaymentState(() => 'cancel-processing')
+      await api.post('/subscriptions/cancel')
+      setSubscriptionPaymentState(() => 'processing')
+      const sub = await api.get('/subscriptions/me')
+      setUserSubscription({ ...userSubscription, subscription: sub.data })
+    } catch (err) {
+      setSubscriptionPaymentState(() => 'cancel-failure')
+    }
+  }
+
+  const goBack = () => {
+    router.back()
+  }
+
+  return (
+    <View className='flex-1 items-center justify-center gap-8 p-4'>
+      <CircleAlert className='text-amber-500 size-24' />
+      <View className='items-center gap-4'>
+        <GoogleSansText
+          variant='semi-bold'
+          className='text-2xl text-center'
+        >
+          Your current subscription will be cancelled.
+        </GoogleSansText>
+        <View className='gap-2'>
+          <DefaultPressable
+            text='Proceed to payment'
+            onPress={cancelSubscription}
+            variant='warning'
+            Icon={ArrowRight}
+          />
+          <DefaultPressable
+            text='Go back'
+            onPress={goBack}
+            Icon={Undo2}
+          />
+        </View>
+      </View>
+    </View>
+  )
+}
+
+ensureInterop([BanknoteCheck, BanknoteX, Undo2, ArrowRight])
