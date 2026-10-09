@@ -17,16 +17,13 @@ export default function TextAlert({
   let iconColor
   let textColor
   let textClassName
-  let topMargin
 
   switch (textSize) {
     case 'xs':
       textClassName = 'text-xs'
-      topMargin = ''
       break
     case 'sm':
       textClassName = 'text-sm'
-      topMargin = 'mt-0.5'
       break
   }
 
@@ -43,7 +40,7 @@ export default function TextAlert({
 
   return (
     <View className='flex-row gap-2 items-center'>
-      <View className={`${topMargin}`}>
+      <View className='size-4 items-center justify-center'>
         <CircleAlert className={`${iconColor} size-4`} />
       </View>
       <GoogleSansText className={`${textClassName} ${textColor} flex-1`}>
