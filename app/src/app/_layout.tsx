@@ -12,6 +12,7 @@ import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useColorScheme } from 'nativewind'
 import { View } from 'react-native'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
 export default function RootLayout() {
   const [fontLoaded] = useFonts(fontList)
@@ -22,34 +23,36 @@ export default function RootLayout() {
   }
 
   return (
-    <AppProvider>
-      <ThemeContextProvider>
-        <DeepLinkContextProvider>
-          <View
-            style={themes[colorScheme ?? 'light']}
-            className='flex-1 bg-bg-primary'
-          >
-            <StatusBar
-              style={(colorScheme ?? 'light') === 'light' ? 'dark' : 'light'}
-            />
-            <Stack
-              initialRouteName='(protected)'
-              screenOptions={{
-                headerShown: false,
-                contentStyle: {
-                  backgroundColor: 'transparent',
-                },
-              }}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AppProvider>
+        <ThemeContextProvider>
+          <DeepLinkContextProvider>
+            <View
+              style={themes[colorScheme ?? 'light']}
+              className='flex-1 bg-bg-primary'
             >
-              <Stack.Screen name='(protected)' />
-              <Stack.Screen name='auth' />
-            </Stack>
-            <NavigationBar
-              style={(colorScheme ?? 'light') === 'light' ? 'dark' : 'light'}
-            />
-          </View>
-        </DeepLinkContextProvider>
-      </ThemeContextProvider>
-    </AppProvider>
+              <StatusBar
+                style={(colorScheme ?? 'light') === 'light' ? 'dark' : 'light'}
+              />
+              <Stack
+                initialRouteName='(protected)'
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: {
+                    backgroundColor: 'transparent',
+                  },
+                }}
+              >
+                <Stack.Screen name='(protected)' />
+                <Stack.Screen name='auth' />
+              </Stack>
+              <NavigationBar
+                style={(colorScheme ?? 'light') === 'light' ? 'dark' : 'light'}
+              />
+            </View>
+          </DeepLinkContextProvider>
+        </ThemeContextProvider>
+      </AppProvider>
+    </GestureHandlerRootView>
   )
 }

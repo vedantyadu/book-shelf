@@ -1,9 +1,9 @@
 import { CircleActivityIndicator } from '@/components/app/activity-indicator'
 import TextAlert from '@/components/app/alert'
 import { BottomBar, TopBar } from '@/components/app/app-layout'
+import { SelectableSortableList } from '@/components/app/sortable-list'
 import { GoogleSansText } from '@/components/ui/fonts'
 import { DefaultPressable } from '@/components/ui/pressable'
-import { Separator } from '@/components/ui/separator'
 import { PageType, useNewBookContext } from '@/context/scan-context'
 import { ensureInterop } from '@/utils/icon-interop'
 import { Image } from 'expo-image'
@@ -11,53 +11,18 @@ import { router } from 'expo-router'
 import {
   ArrowRight,
   BookOpenCheck,
+  ClockFading,
   Ghost,
   ScanText,
   Square,
   SquareCheck,
   WavesHorizontal,
 } from 'lucide-react-native'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  LayoutRectangle,
-  PanResponder,
-  Pressable,
-  ScrollView,
-  useWindowDimensions,
-  View,
-} from 'react-native'
+import { Pressable, View } from 'react-native'
 import {
   extractText,
   scanPage,
 } from '../../../../modules/page-scan-module/src/PageScanModule'
-
-function reorderPages(
-  allPages: PageType[],
-  selectedIds: string[],
-  targetSlot: number,
-): PageType[] {
-  const selectedSet = new Set(selectedIds)
-  const selectedItems = allPages.filter((p) => selectedSet.has(p.id))
-  if (selectedItems.length === 0) return allPages
-
-  let unselectedTargetIndex = 0
-  for (let i = 0; i < targetSlot && i < allPages.length; i++) {
-    if (!selectedSet.has(allPages[i].id)) {
-      unselectedTargetIndex++
-    }
-  }
-
-  const unselectedItems = allPages.filter((p) => !selectedSet.has(p.id))
-  return [
-    ...unselectedItems.slice(0, unselectedTargetIndex),
-    ...selectedItems,
-    ...unselectedItems.slice(unselectedTargetIndex),
-  ]
-}
-
-function DropIndicatorBar() {
-  return <Separator className='bg-brand-primary' />
-}
 
 function ScanPagesPressable() {
   const { pages, setPages } = useNewBookContext()
@@ -66,12 +31,13 @@ function ScanPagesPressable() {
     const scanResult = await scanPage()
     if (!scanResult || !scanResult.pages.length) return
 
+    const startIndex = pages.length
     const newPages: PageType[] = scanResult.pages.map(
       (uri: string, index: number) => ({
-        id: `${index}`,
+        id: `${startIndex + index + 1}`,
         uri: uri,
         text: null,
-        state: 'processing',
+        state: 'queued',
       }),
     )
 
@@ -82,6 +48,17 @@ function ScanPagesPressable() {
   const processImages = async (pagesToProcess: PageType[]) => {
     for (const page of pagesToProcess) {
       try {
+        setPages((prev) =>
+          prev.map((p) =>
+            p.id === page.id
+              ? {
+                  ...p,
+                  state: 'processing',
+                }
+              : p,
+          ),
+        )
+
         const textResult = await extractText(page.uri)
 
         setPages((prev) =>
@@ -152,7 +129,8 @@ export function ScanPagesBottomBar() {
 }
 
 export function AddPagesTopBar() {
-  const { pages, selectedPages } = useNewBookContext()
+  const { pages, setPages, selectedPages, setSelectedPages } =
+    useNewBookContext()
 
   const done = () => {
     router.back()
@@ -164,21 +142,43 @@ export function AddPagesTopBar() {
     ? `${selectedPages.length} selected`
     : `${pages.length} ${pageLabel}`
 
+  const deleteSelectedPages = () => {
+    setPages((prev) => prev.filter((p) => !selectedPages.includes(p.id)))
+    setSelectedPages([])
+  }
+
+  const ActionButton = () => {
+    if (isSelecting) {
+      return (
+        <Pressable onPress={deleteSelectedPages}>
+          <GoogleSansText
+            variant='bold'
+            className='text-red-500 text-lg'
+          >
+            Delete
+          </GoogleSansText>
+        </Pressable>
+      )
+    }
+
+    return (
+      <Pressable onPress={done}>
+        <GoogleSansText
+          variant='bold'
+          className='text-brand-primary text-lg'
+        >
+          Done
+        </GoogleSansText>
+      </Pressable>
+    )
+  }
+
   return (
     <TopBar
       title={title}
       showBackButton={false}
     >
-      {!isSelecting && (
-        <Pressable onPress={done}>
-          <GoogleSansText
-            variant='bold'
-            className='text-brand-primary text-lg'
-          >
-            Done
-          </GoogleSansText>
-        </Pressable>
-      )}
+      <ActionButton />
     </TopBar>
   )
 }
@@ -186,172 +186,6 @@ export function AddPagesTopBar() {
 export function PageList() {
   const { pages, setPages, selectedPages, setSelectedPages } =
     useNewBookContext()
-  const [dropSlot, setDropSlot] = useState<number | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
-
-  const containerRef = useRef<View>(null)
-  const scrollViewRef = useRef<ScrollView>(null)
-  const scrollYRef = useRef(0)
-  const containerTopRef = useRef(0)
-  const itemLayoutsRef = useRef<{
-    [index: number]: { y: number; height: number }
-  }>({})
-  const frozenLayoutsRef = useRef<{ y: number; height: number }[]>([])
-
-  const isDraggingRef = useRef(false)
-  const dropSlotRef = useRef<number | null>(null)
-  const selectedPagesRef = useRef<string[]>([])
-  const pagesRef = useRef<PageType[]>([])
-
-  selectedPagesRef.current = selectedPages
-  pagesRef.current = pages
-  dropSlotRef.current = dropSlot
-
-  const { height: windowHeight } = useWindowDimensions()
-
-  const updateContainerLayout = useCallback(() => {
-    containerRef.current?.measureInWindow((_x, y) => {
-      if (typeof y === 'number' && y > 0) {
-        containerTopRef.current = y
-      }
-    })
-  }, [])
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      updateContainerLayout()
-    }, 100)
-    return () => clearTimeout(timer)
-  }, [updateContainerLayout])
-
-  const calculateDropSlot = useCallback((pageY: number) => {
-    const layouts = frozenLayoutsRef.current
-    const total = pagesRef.current.length
-    if (total === 0 || layouts.length === 0) return
-
-    const scrollY = scrollYRef.current
-    const containerTop = containerTopRef.current
-    const contentY = pageY - containerTop + scrollY
-
-    const first = layouts[0]
-    if (first && contentY < first.y + first.height / 2) {
-      setDropSlot(0)
-      return
-    }
-
-    const last = layouts[total - 1]
-    if (last && contentY >= last.y + last.height / 2) {
-      setDropSlot(total)
-      return
-    }
-
-    for (let i = 0; i < total - 1; i++) {
-      const cur = layouts[i]
-      const next = layouts[i + 1]
-      if (cur && next) {
-        const curMid = cur.y + cur.height / 2
-        const nextMid = next.y + next.height / 2
-        if (contentY >= curMid && contentY < nextMid) {
-          setDropSlot(i + 1)
-          return
-        }
-      }
-    }
-
-    setDropSlot(total)
-  }, [])
-
-  const onDragStart = useCallback(
-    (pageId: string, pageY: number) => {
-      isDraggingRef.current = true
-      setIsDragging(true)
-
-      const layouts: { y: number; height: number }[] = []
-      for (let i = 0; i < pagesRef.current.length; i++) {
-        layouts.push(itemLayoutsRef.current[i] ?? { y: i * 90, height: 90 })
-      }
-      frozenLayoutsRef.current = layouts
-
-      const touchedIndex = pagesRef.current.findIndex((p) => p.id === pageId)
-      if (
-        containerTopRef.current === 0 &&
-        touchedIndex !== -1 &&
-        layouts[touchedIndex]
-      ) {
-        containerTopRef.current =
-          pageY +
-          scrollYRef.current -
-          (layouts[touchedIndex].y + layouts[touchedIndex].height / 2)
-      }
-
-      updateContainerLayout()
-
-      setSelectedPages((prev) => {
-        if (prev.length === 0) {
-          return [pageId]
-        }
-        if (!prev.includes(pageId)) {
-          return [...prev, pageId]
-        }
-        return prev
-      })
-
-      calculateDropSlot(pageY)
-    },
-    [calculateDropSlot, setSelectedPages, updateContainerLayout],
-  )
-
-  const onDragMove = useCallback(
-    (pageY: number) => {
-      calculateDropSlot(pageY)
-
-      const topMargin = 130
-      const bottomMargin = windowHeight - 120
-
-      if (pageY < topMargin && scrollYRef.current > 0) {
-        scrollViewRef.current?.scrollTo({
-          y: Math.max(0, scrollYRef.current - 14),
-          animated: false,
-        })
-      } else if (pageY > bottomMargin) {
-        scrollViewRef.current?.scrollTo({
-          y: scrollYRef.current + 14,
-          animated: false,
-        })
-      }
-    },
-    [calculateDropSlot, windowHeight],
-  )
-
-  const onDragEnd = useCallback(() => {
-    if (isDraggingRef.current && dropSlotRef.current !== null) {
-      const targetSlot = dropSlotRef.current
-      const currentSelected = selectedPagesRef.current
-      setPages((prev) => reorderPages(prev, currentSelected, targetSlot))
-    }
-
-    isDraggingRef.current = false
-    setIsDragging(false)
-    setDropSlot(null)
-    dropSlotRef.current = null
-  }, [setPages])
-
-  const onTap = useCallback(
-    (pageId: string) => {
-      if (selectedPagesRef.current.length > 0) {
-        setSelectedPages((prev) =>
-          prev.includes(pageId)
-            ? prev.filter((id) => id !== pageId)
-            : [...prev, pageId],
-        )
-      }
-    },
-    [setSelectedPages],
-  )
-
-  const onItemLayout = useCallback((index: number, layout: LayoutRectangle) => {
-    itemLayoutsRef.current[index] = { y: layout.y, height: layout.height }
-  }, [])
 
   if (pages.length === 0) {
     return (
@@ -362,42 +196,23 @@ export function PageList() {
   }
 
   return (
-    <ScrollView
-      ref={scrollViewRef}
+    <SelectableSortableList<PageType>
       className='flex-1'
-      showsVerticalScrollIndicator={false}
-      scrollEnabled={!isDragging}
-      onScroll={(e) => {
-        scrollYRef.current = e.nativeEvent.contentOffset.y
-      }}
-      scrollEventThrottle={16}
-    >
-      <View
-        ref={containerRef}
-        className='px-4 flex-1 gap-2 pb-6'
-        onLayout={updateContainerLayout}
-      >
-        {isDragging && dropSlot === 0 && <DropIndicatorBar />}
-        {pages.map((page, i) => (
-          <View
-            key={page.id}
-            onLayout={(e) => onItemLayout(i, e.nativeEvent.layout)}
-            className='gap-2'
-          >
-            <PageItem
-              page={page}
-              pageNumber={i}
-              isDragging={isDragging}
-              onDragStart={onDragStart}
-              onDragMove={onDragMove}
-              onDragEnd={onDragEnd}
-              onTap={onTap}
-            />
-            {isDragging && dropSlot === i + 1 && <DropIndicatorBar />}
-          </View>
-        ))}
-      </View>
-    </ScrollView>
+      data={pages}
+      keyExtractor={(item) => item.id}
+      onReorder={setPages}
+      selectedIds={selectedPages}
+      onSelectionChange={setSelectedPages}
+      badgeClassName='bg-brand-primary'
+      renderItem={(item, info) => (
+        <PageItem
+          page={item}
+          pageNumber={info.index}
+          isSelected={info.isSelected}
+          selectionMode={info.selectionMode}
+        />
+      )}
+    />
   )
 }
 
@@ -407,9 +222,17 @@ function EmptyPageList() {
       <View className='items-center justify-center size-12'>
         <Ghost className='text-icon size-12' />
       </View>
-      <GoogleSansText className='text-icon'>
-        No pages scanned yet.
-      </GoogleSansText>
+      <View className='items-center'>
+        <GoogleSansText
+          className='text-icon text-xl'
+          variant='bold'
+        >
+          No pages.
+        </GoogleSansText>
+        <GoogleSansText className='text-icon'>
+          Scan some pages to get started.
+        </GoogleSansText>
+      </View>
     </View>
   )
 }
@@ -417,98 +240,28 @@ function EmptyPageList() {
 function PageItem({
   page,
   pageNumber,
-  isDragging,
-  onDragStart,
-  onDragMove,
-  onDragEnd,
-  onTap,
+  isSelected,
+  selectionMode,
 }: {
   page: PageType
   pageNumber: number
-  isDragging: boolean
-  onDragStart: (pageId: string, pageY: number) => void
-  onDragMove: (pageY: number) => void
-  onDragEnd: () => void
-  onTap: (pageId: string) => void
+  isSelected: boolean
+  selectionMode: boolean
 }) {
-  const { selectedPages } = useNewBookContext()
-  const isSelected = selectedPages.includes(page.id)
-  const isSelectionMode = selectedPages.length > 0
-
-  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const isDraggingLocalRef = useRef(false)
-  const touchStartPosRef = useRef({ x: 0, y: 0 })
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => isDraggingLocalRef.current,
-        onPanResponderTerminationRequest: () => !isDraggingLocalRef.current,
-
-        onPanResponderGrant: (evt) => {
-          const startPageY = evt.nativeEvent.pageY
-          touchStartPosRef.current = {
-            x: evt.nativeEvent.pageX,
-            y: startPageY,
-          }
-          isDraggingLocalRef.current = false
-
-          longPressTimerRef.current = setTimeout(() => {
-            isDraggingLocalRef.current = true
-            onDragStart(page.id, startPageY)
-          }, 250)
-        },
-
-        onPanResponderMove: (evt, gestureState) => {
-          const dist = Math.hypot(gestureState.dx, gestureState.dy)
-
-          if (!isDraggingLocalRef.current && dist > 8) {
-            if (longPressTimerRef.current) {
-              clearTimeout(longPressTimerRef.current)
-              longPressTimerRef.current = null
-            }
-            return
-          }
-
-          if (isDraggingLocalRef.current) {
-            onDragMove(evt.nativeEvent.pageY)
-          }
-        },
-
-        onPanResponderRelease: (evt, gestureState) => {
-          if (longPressTimerRef.current) {
-            clearTimeout(longPressTimerRef.current)
-            longPressTimerRef.current = null
-          }
-
-          if (isDraggingLocalRef.current) {
-            isDraggingLocalRef.current = false
-            onDragEnd()
-          } else {
-            const dist = Math.hypot(gestureState.dx, gestureState.dy)
-            if (dist <= 8) {
-              onTap(page.id)
-            }
-          }
-        },
-
-        onPanResponderTerminate: () => {
-          if (longPressTimerRef.current) {
-            clearTimeout(longPressTimerRef.current)
-            longPressTimerRef.current = null
-          }
-          if (isDraggingLocalRef.current) {
-            isDraggingLocalRef.current = false
-            onDragEnd()
-          }
-        },
-      }),
-    [page.id, onDragStart, onDragMove, onDragEnd, onTap],
-  )
-
   const Description = () => {
     switch (page.state) {
+      case 'queued':
+        return (
+          <View className='flex-row gap-2 items-center'>
+            <ClockFading
+              className='text-icon'
+              size={12}
+            />
+            <GoogleSansText className='text-xs text-text-secondary'>
+              Queued
+            </GoogleSansText>
+          </View>
+        )
       case 'processing':
         return (
           <View className='flex-row gap-2 items-center'>
@@ -545,15 +298,10 @@ function PageItem({
   }
 
   return (
-    <View
-      {...panResponder.panHandlers}
-      style={{
-        opacity: isDragging && isSelected ? 0.6 : 1,
-      }}
-    >
+    <View className='px-4 pb-2 h-full'>
       <PageSection isSelected={isSelected}>
         <View className='flex-row gap-4 items-center'>
-          {isSelectionMode && (
+          {selectionMode && (
             <View className='size-5 items-center justify-center'>
               {isSelected ? (
                 <SquareCheck className='text-brand-primary size-5' />
@@ -571,10 +319,10 @@ function PageItem({
               style={{ width: 64, height: 64 }}
             />
           </View>
-          <View className={`flex-1 gap-1 ${isSelectionMode ? '' : 'pr-4'}`}>
+          <View className={`flex-1 gap-1 ${selectionMode ? '' : 'pr-4'}`}>
             <GoogleSansText
-              variant='medium'
-              className='text-text-secondary text-sm'
+              variant='bold'
+              className='text-text-secondary'
             >
               Page {pageNumber + 1}
             </GoogleSansText>
@@ -587,10 +335,10 @@ function PageItem({
               }}
               numberOfLines={1}
             >
-              Scanned as {page.id}
+              Scanned as page {page.id}
             </GoogleSansText>
           </View>
-          {!isSelectionMode && <ArrowRight className='text-icon' />}
+          {!selectionMode && <ArrowRight className='text-icon' />}
         </View>
       </PageSection>
     </View>
@@ -606,7 +354,7 @@ function PageSection({
 }) {
   return (
     <View
-      className={`rounded-xl p-4 bg-bg-secondary gap-2 border ${
+      className={`rounded-xl p-4 bg-bg-secondary gap-2 border flex-1 justify-center ${
         isSelected ? 'border-brand-primary/60' : 'border-transparent'
       }`}
     >
@@ -623,4 +371,5 @@ ensureInterop([
   Square,
   SquareCheck,
   WavesHorizontal,
+  ClockFading,
 ])

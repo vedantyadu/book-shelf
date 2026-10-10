@@ -1,3 +1,4 @@
+import { CircleActivityIndicator } from '@/components/app/activity-indicator'
 import TextAlert from '@/components/app/alert'
 import { GoogleSansText } from '@/components/ui/fonts'
 import { TextInputField } from '@/components/ui/input'
@@ -5,7 +6,7 @@ import { ToggleSwitch } from '@/components/ui/switch'
 import { useNewBookContext } from '@/context/scan-context'
 import { ensureInterop } from '@/utils/icon-interop'
 import { router } from 'expo-router'
-import { ArrowRight, FilePlus } from 'lucide-react-native'
+import { AlertCircle, ArrowRight, Check, FilePlus } from 'lucide-react-native'
 import { useState } from 'react'
 import { Pressable, View } from 'react-native'
 
@@ -34,16 +35,56 @@ export function NewBookPages() {
 
   const pageLabel = pages.length === 1 ? 'page' : 'pages'
   const text =
-    pages.length === 0 ? 'Add pages' : `${pages.length} ${pageLabel} added`
+    pages.length === 0 ? 'Scan pages' : `${pages.length} ${pageLabel}`
+
+  const PageIcon = () => {
+    if (pages.length === 0) {
+      return (
+        <View className='size-4 items-center justify-center'>
+          <FilePlus className='size-4 text-icon' />
+        </View>
+      )
+    }
+
+    if (
+      pages.some(
+        (page) => page.state === 'processing' || page.state === 'queued',
+      )
+    ) {
+      return (
+        <CircleActivityIndicator
+          iconSize={12}
+          strokeWidth={2}
+        />
+      )
+    }
+
+    if (pages.some((page) => page.state === 'error')) {
+      return (
+        <View className='size-4 items-center justify-center'>
+          <AlertCircle className='size-4 text-amber-500' />
+        </View>
+      )
+    }
+
+    return (
+      <View className='size-4 items-center justify-center'>
+        <Check className='size-4 text-brand-primary' />
+      </View>
+    )
+  }
 
   return (
     <View className='flex-row items-center justify-between rounded-xl'>
-      <GoogleSansText
-        variant='medium'
-        className='text-text-secondary'
-      >
-        {text}
-      </GoogleSansText>
+      <View className='flex-row items-center gap-2'>
+        <GoogleSansText
+          variant='medium'
+          className='text-text-secondary'
+        >
+          {text}
+        </GoogleSansText>
+        <PageIcon />
+      </View>
       <Pressable
         className='size-8 items-center justify-center'
         onPress={goToPages}
@@ -79,4 +120,4 @@ export function NewBookCloud() {
   )
 }
 
-ensureInterop([FilePlus])
+ensureInterop([ArrowRight, FilePlus])
