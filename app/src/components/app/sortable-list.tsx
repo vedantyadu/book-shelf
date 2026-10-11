@@ -12,8 +12,14 @@
  * Rows are your own components (`renderItem`) and may have DIFFERENT heights:
  *  • Omit `itemHeight`  -> rows are measured with onLayout (set `estimatedItemHeight`
  *                          close to the typical height for the best first paint).
+ *                          Measured heights are cached across mounts, so revisiting a
+ *                          screen renders correctly on the very first frame.
  *  • `itemHeight={68}`  -> every row is exactly 68px.
  *  • `itemHeight={(item) => ...}` -> you know each row's height up front (no measuring).
+ *
+ * Navigation performance:
+ *  • The list mounts AFTER the screen transition finishes (`deferMount`, default true).
+ *  • Measuring never re-renders React; the container height is driven from the UI thread.
  *
  * Styled with NativeWind v4 (`className`).
  *
@@ -29,7 +35,7 @@ import React, {
   useRef,
   useState,
 } from 'react'
-import { View } from 'react-native'
+import { ActivityIndicator, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   SharedValue,
@@ -75,6 +81,40 @@ export type SelectableSortableListProps<T> = {
   itemHeight?: number | ((item: T, index: number) => number)
   /** Height assumed for rows that haven't been measured yet. Default 64. */
   estimatedItemHeight?: number
+  /**
+   * Namespace for the cross-mount height cache. Give each distinct list/screen its own
+   * key (e.g. "playlist") so identical ids in different lists never share heights.
+   * Default ''.
+   */
+  heightCacheKey?: string
+
+  /**
+   * Wait until navigation transitions/interactions finish before mounting the heavy list.
+   * Default true.
+   */
+  deferMount?: boolean
+  /**
+   * Rendered while the mount is deferred (e.g. a skeleton). Defaults to an empty view with
+   * the same `className` plus the header, so nothing flashes.
+   */
+  placeholder?: React.ReactElement | null
+
+  /**
+   * True while YOUR data is still being fetched. While true and `data` is empty, the
+   * loader is shown instead of the list (a refresh with existing data keeps the list).
+   */
+  isLoading?: boolean
+  /**
+   * Custom loader element (skeleton, Lottie, spinner...). Omit for a default spinner,
+   * pass null for no loader. Shown while data is loading, while the mount is deferred,
+   * and while rows are measured for the first time.
+   */
+  loader?: React.ReactElement | null
+  /** NativeWind classes wrapping the loader. It fills the available space, so
+   *  Default 'flex-1 justify-center': full width and height, content centered vertically.
+   *  Avoid 'items-center' if your loader should span the full width (it shrinks children
+   *  to their content width); give the loader itself 'self-center' instead. */
+  loaderContainerClassName?: string
 
   /** Optional controlled selection. Omit to let the list manage it. */
   selectedIds?: string[]
@@ -104,6 +144,26 @@ export type SelectableSortableListProps<T> = {
   badgeContainerClassName?: string
   /** NativeWind classes for the DEFAULT pill (ignored with renderSelectionBadge). */
   badgeClassName?: string
+}
+
+/* ------------------------------------------------------------------ */
+/* Height cache (survives unmount / re-mount, i.e. screen navigation)  */
+/* ------------------------------------------------------------------ */
+
+const heightCache = new Map<string, number>()
+const MAX_CACHED_HEIGHTS = 3000
+
+function cacheKeyOf(ns: string, id: string) {
+  return ns + '\u241F' + id
+}
+
+function cacheSet(key: string, h: number) {
+  if (!heightCache.has(key) && heightCache.size >= MAX_CACHED_HEIGHTS) {
+    // Map iterates in insertion order -> drop the oldest entry.
+    const oldest = heightCache.keys().next().value
+    if (oldest !== undefined) heightCache.delete(oldest)
+  }
+  heightCache.set(key, h)
 }
 
 /* ------------------------------------------------------------------ */
@@ -218,9 +278,47 @@ type RowProps = {
   /** Set when heights are known up front; undefined => measure with onLayout. */
   fixedHeight?: number
   ctx: Ctx
-  badge: React.ReactElement | null
-  children: React.ReactNode
+  item: unknown
+  index: number
+  isSelected: boolean
+  selectionMode: boolean
+  /** NOTE: deliberately ignored by the memo comparison (see areEqual). */
+  selectedCount: number
+  renderItem: (item: any, info: RowInfo) => React.ReactElement
+  renderBadge: (count: number) => React.ReactElement | null
 }
+
+/** Re-render a row only when something it actually shows has changed. Selecting one row
+ *  therefore re-renders ONE row instead of the whole list. `selectedCount` is excluded on
+ *  purpose (it changes on every tap); use `renderSelectionBadge` to show the count. */
+function areEqual(a: RowProps, b: RowProps) {
+  return (
+    a.id === b.id &&
+    a.initialTop === b.initialTop &&
+    a.pressMs === b.pressMs &&
+    a.fixedHeight === b.fixedHeight &&
+    a.ctx === b.ctx &&
+    a.item === b.item &&
+    a.index === b.index &&
+    a.isSelected === b.isSelected &&
+    a.selectionMode === b.selectionMode &&
+    a.renderItem === b.renderItem &&
+    a.renderBadge === b.renderBadge
+  )
+}
+
+/** The selected count reaches the badges through context, so a count change re-renders
+ *  only these tiny badge components, never the row contents. */
+const BadgeCountContext = React.createContext(0)
+
+const RowBadge = memo(function RowBadge({
+  renderBadge,
+}: {
+  renderBadge: (count: number) => React.ReactElement | null
+}) {
+  const count = React.useContext(BadgeCountContext)
+  return renderBadge(count)
+})
 
 const SortableRow = memo(function SortableRow({
   id,
@@ -228,8 +326,13 @@ const SortableRow = memo(function SortableRow({
   pressMs,
   fixedHeight,
   ctx,
-  badge,
-  children,
+  item,
+  index,
+  isSelected,
+  selectionMode,
+  selectedCount,
+  renderItem,
+  renderBadge,
 }: RowProps) {
   const {
     est,
@@ -312,6 +415,10 @@ const SortableRow = memo(function SortableRow({
       .activateAfterLongPress(pressMs)
       .onStart(() => {
         'worklet'
+        // 0. Flag the drag on the JS side first, so the selection update that follows
+        //    can never rebuild the gesture while it is being activated.
+        runOnJS(onDragStart)()
+
         // 1. Long-press selects the row if it isn't already.
         let map = selectedMap.value
         if (!map[id]) {
@@ -346,7 +453,6 @@ const SortableRow = memo(function SortableRow({
         insertSlot.value = slotFor(order, map, hs, est, top, offset)
         activeId.value = id
         isDragging.value = true
-        runOnJS(onDragStart)()
       })
       .onUpdate((e) => {
         'worklet'
@@ -403,32 +509,127 @@ const SortableRow = memo(function SortableRow({
             : undefined
         }
       >
-        {children}
-        {badge ? (
+        {renderItem(item, { index, isSelected, selectionMode, selectedCount })}
+        {isSelected ? (
           <Animated.View
             pointerEvents='none'
             className={badgeContainerClassName}
             style={badgeStyle}
           >
-            {badge}
+            <RowBadge renderBadge={renderBadge} />
           </Animated.View>
         ) : null}
       </Animated.View>
     </GestureDetector>
   )
-})
+}, areEqual)
 
 /* ------------------------------------------------------------------ */
-/* List                                                                */
+/* Public component: defers the heavy mount until transitions finish  */
 /* ------------------------------------------------------------------ */
 
-export function SelectableSortableList<T>({
+const LOADER_MIN_HEIGHT = 120
+
+/**
+ * Runs `cb` once the JS thread is idle (replacement for the deprecated
+ * InteractionManager.runAfterInteractions). Waits one frame first so the screen
+ * transition can start, then uses requestIdleCallback with a timeout so the callback is
+ * guaranteed to run even if the thread never goes fully idle. Returns a cancel function.
+ */
+function runWhenIdle(cb: () => void, timeoutMs = 300): () => void {
+  const g = globalThis as any
+  let cancelled = false
+  let idleId: number | undefined
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+
+  const run = () => {
+    if (!cancelled) cb()
+  }
+
+  const rafId = requestAnimationFrame(() => {
+    if (cancelled) return
+    if (typeof g.requestIdleCallback === 'function') {
+      idleId = g.requestIdleCallback(run, { timeout: timeoutMs })
+    } else {
+      timeoutId = setTimeout(run, 0) // very old runtimes without requestIdleCallback
+    }
+  })
+
+  return () => {
+    cancelled = true
+    cancelAnimationFrame(rafId)
+    if (idleId !== undefined) g.cancelIdleCallback?.(idleId)
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
+  }
+}
+
+function sameHeights(a: Heights, b: Heights) {
+  const ak = Object.keys(a)
+  if (ak.length !== Object.keys(b).length) return false
+  for (let i = 0; i < ak.length; i++) {
+    if (a[ak[i]] !== b[ak[i]]) return false
+  }
+  return true
+}
+
+function sameArray(a: string[], b: string[]) {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
+}
+
+export function SelectableSortableList<T>(
+  props: SelectableSortableListProps<T>,
+) {
+  const {
+    deferMount = true,
+    isLoading = false,
+    placeholder,
+    className,
+    ListHeaderComponent,
+    loader,
+    loaderContainerClassName = 'flex-1 justify-center',
+  } = props
+  const [show, setShow] = useState(!deferMount)
+
+  useEffect(() => {
+    if (!deferMount || show) return
+    return runWhenIdle(() => setShow(true))
+  }, [deferMount, show])
+
+  if (!show || (isLoading && props.data.length === 0)) {
+    if (placeholder !== undefined) return placeholder
+    return (
+      <View className={className}>
+        {ListHeaderComponent}
+        {loader === null ? null : (
+          <View
+            className={loaderContainerClassName}
+            style={{ width: '100%', flexGrow: 1 }}
+          >
+            {loader ?? <ActivityIndicator size='large' />}
+          </View>
+        )}
+      </View>
+    )
+  }
+  return <SelectableSortableListImpl {...props} />
+}
+
+/* ------------------------------------------------------------------ */
+/* List implementation                                                 */
+/* ------------------------------------------------------------------ */
+
+function SelectableSortableListImpl<T>({
   data,
   keyExtractor,
   renderItem,
   onReorder,
   itemHeight,
   estimatedItemHeight = 64,
+  heightCacheKey = '',
+  loader,
+  loaderContainerClassName = 'flex-1 justify-center',
   selectedIds,
   onSelectionChange,
   onItemPress,
@@ -443,7 +644,14 @@ export function SelectableSortableList<T>({
   badgeContainerClassName = 'absolute right-3 top-1.5',
   badgeClassName = 'bg-brand-primary',
 }: SelectableSortableListProps<T>) {
-  const ids = useMemo(() => data.map(keyExtractor), [data, keyExtractor])
+  const idsRaw = useMemo(() => data.map(keyExtractor), [data, keyExtractor])
+  // Keep the SAME array identity while the ids are unchanged, so a parent re-render with a
+  // fresh-but-equal `data` array (e.g. when the screen regains focus) triggers no extra work.
+  const idsRef = useRef(idsRaw)
+  if (idsRef.current !== idsRaw && !sameArray(idsRef.current, idsRaw)) {
+    idsRef.current = idsRaw
+  }
+  const ids = idsRef.current
   const idsKey = ids.join('\u241F')
   const est = estimatedItemHeight
   const fixed = itemHeight !== undefined
@@ -514,12 +722,12 @@ export function SelectableSortableList<T>({
   /* The hold time depends on the mode, but the gesture is only re-configured while no
      drag is in progress (changing it mid-drag could interrupt the drag that just started). */
   const draggingRef = useRef(false)
-  const [dragTick, setDragTick] = useState(0)
-  const [gestureSelMode, setGestureSelMode] = useState(false)
+  const [, setDragTick] = useState(0)
   const selectionMode = selected.length > 0
-  useEffect(() => {
-    if (!draggingRef.current) setGestureSelMode(selectionMode)
-  }, [selectionMode, dragTick])
+  // Latched during render (single pass, no extra state + effect round trip). Frozen while a
+  // drag is in progress; onDragEnd forces one more render to pick up the final mode.
+  const gestureModeRef = useRef(false)
+  if (!draggingRef.current) gestureModeRef.current = selectionMode
   const onDragStart = useCallback(() => {
     draggingRef.current = true
   }, [])
@@ -527,11 +735,28 @@ export function SelectableSortableList<T>({
     draggingRef.current = false
     setDragTick((t) => t + 1)
   }, [])
-  const pressMs = gestureSelMode ? selectionLongPressMs : longPressMs
+  const pressMs = gestureModeRef.current ? selectionLongPressMs : longPressMs
 
-  /* ---- heights known on the JS side (fixed, measured, or estimated) ---- */
-  const known = useRef<Heights>({})
-  const [measureTick, setMeasureTick] = useState(0)
+  /* ---- heights known on the JS side (fixed, cached, measured, or estimated) ---- */
+  const cacheNs = useRef(heightCacheKey)
+  cacheNs.current = heightCacheKey
+
+  // Seeded ONCE from the cross-mount cache. Mutated in place by reportHeight (it is only a
+  // lookup table, never rendered from directly, so mutating it does not need a re-render).
+  const [seed] = useState(() => {
+    const knownInit: Heights = {}
+    let all = true
+    if (!fixed) {
+      for (const id of ids) {
+        const c = heightCache.get(cacheKeyOf(heightCacheKey, id))
+        if (c === undefined) all = false
+        else knownInit[id] = c
+      }
+    }
+    return { known: knownInit, ready: fixed || all }
+  })
+  const known = seed.known
+
   const jsHeights = useMemo(() => {
     const out: Heights = {}
     data.forEach((item, i) => {
@@ -540,15 +765,10 @@ export function SelectableSortableList<T>({
         ? typeof itemHeight === 'function'
           ? itemHeight(item, i)
           : (itemHeight as number)
-        : (known.current[id] ?? est)
+        : (known[id] ?? est)
     })
     return out
-  }, [data, ids, fixed, itemHeight, est, measureTick])
-
-  const totalJs = useMemo(
-    () => ids.reduce((acc, id) => acc + jsHeights[id], 0),
-    [ids, jsHeights],
-  )
+  }, [data, ids, fixed, itemHeight, est, known])
 
   const initialTops = useMemo(() => {
     const out: Record<string, number> = {}
@@ -573,7 +793,9 @@ export function SelectableSortableList<T>({
   const scrollY = useSharedValue(0)
   const autoActive = useSharedValue(false)
   const suppress = useSharedValue(false)
-  const ready = useSharedValue(fixed)
+  const ready = useSharedValue(seed.ready)
+  const fade = useSharedValue(seed.ready ? 1 : 0)
+  const lastHeights = useRef<Heights>(jsHeights)
   const insertSlot = useSharedValue(0)
   const groupOffset = useSharedValue(0)
   const viewH = useSharedValue(0)
@@ -584,9 +806,29 @@ export function SelectableSortableList<T>({
     orderIds.value = ids
   }, [idsKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Only cross to the UI thread when the heights actually changed.
   useEffect(() => {
+    if (sameHeights(lastHeights.current, jsHeights)) return
+    lastHeights.current = jsHeights
     heights.value = jsHeights
   }, [jsHeights]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Data arriving into a previously empty list: show the loader until rows are measured.
+  const prevCount = useRef(ids.length)
+  useEffect(() => {
+    if (!fixed && prevCount.current === 0 && ids.length > 0) {
+      if (ids.some((id) => known[id] === undefined)) ready.value = false
+    }
+    prevCount.current = ids.length
+  }, [idsKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cross-fade between loader and list.
+  useAnimatedReaction(
+    () => ready.value,
+    (r) => {
+      fade.value = withTiming(r ? 1 : 0, { duration: 180 })
+    },
+  )
 
   useEffect(() => {
     const m: Record<string, boolean> = {}
@@ -594,25 +836,49 @@ export function SelectableSortableList<T>({
     selectedMap.value = m
   }, [selected.join('\u241F')]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** Rows report their measured height; updates are batched into one UI-thread write. */
+  /* ---- measurement reports (no React re-render) ---- */
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const suppressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const unmounted = useRef(false)
+
+  // Cleanup: never touch shared values after the screen is gone.
+  useEffect(() => {
+    unmounted.current = false // (also covers StrictMode's simulated unmount)
+    return () => {
+      unmounted.current = true
+      if (flushTimer.current) {
+        clearTimeout(flushTimer.current)
+        flushTimer.current = null
+      }
+      if (suppressTimer.current) {
+        clearTimeout(suppressTimer.current)
+        suppressTimer.current = null
+      }
+    }
+  }, [])
+
+  /** Rows report their measured height; updates are batched into one UI-thread write. */
   const reportHeight = useCallback((id: string, h: number) => {
-    if (Math.abs((known.current[id] ?? -1) - h) < 0.5) return
-    known.current[id] = h
+    if (Math.abs((known[id] ?? -1) - h) < 0.5) return
+    known[id] = h
+    cacheSet(cacheKeyOf(cacheNs.current, id), h)
     if (flushTimer.current) return
     flushTimer.current = setTimeout(() => {
       flushTimer.current = null
+      if (unmounted.current) return
       const l = latest.current
       const next: Heights = {}
       l.ids.forEach((rid) => {
-        next[rid] = known.current[rid] ?? l.est
+        next[rid] = known[rid] ?? l.est
       })
       suppress.value = true // snap rows to corrected positions instead of animating
+      lastHeights.current = next
       heights.value = next
       ready.value = true
-      setMeasureTick((t) => t + 1) // re-render so the container gets the exact native height
-      setTimeout(() => {
-        suppress.value = false
+      if (suppressTimer.current) clearTimeout(suppressTimer.current)
+      suppressTimer.current = setTimeout(() => {
+        suppressTimer.current = null
+        if (!unmounted.current) suppress.value = false
       }, 60)
     }, 0)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -682,7 +948,7 @@ export function SelectableSortableList<T>({
     },
   })
   const scrollProps = useAnimatedProps(() => ({
-    scrollEnabled: !isDragging.value,
+    scrollEnabled: !isDragging.value && ready.value,
   }))
 
   useFrameCallback((info) => {
@@ -741,27 +1007,42 @@ export function SelectableSortableList<T>({
 
   const count = selected.length
 
-  /** One indicator element, shared by all rows (only the dragged row reveals it). */
-  const badge = useMemo<React.ReactElement | null>(() => {
-    if (renderSelectionBadge) return renderSelectionBadge(count)
-    if (count <= 1) return null
-    return (
-      <View
-        className={`h-6 min-w-6 items-center justify-center rounded-full px-1.5 ${badgeClassName}`}
-      >
-        <GoogleSansText
-          variant='bold'
-          className='text-text-primary'
+  /** Stable badge factory. Only selected rows mount a badge, and the count reaches them
+   *  through context, so changing the selection never re-renders unrelated rows. */
+  const renderBadge = useCallback(
+    (c: number): React.ReactElement | null => {
+      if (renderSelectionBadge) return renderSelectionBadge(c)
+      if (c <= 1) return null
+      return (
+        <View
+          className={`h-6 min-w-6 items-center justify-center rounded-full px-1.5 ${badgeClassName}`}
         >
-          {count}
-        </GoogleSansText>
-      </View>
-    )
-  }, [renderSelectionBadge, count, badgeClassName])
+          <GoogleSansText
+            variant='bold'
+            className='text-text-primary'
+          >
+            {c}
+          </GoogleSansText>
+        </View>
+      )
+    },
+    [renderSelectionBadge, badgeClassName],
+  )
 
-  const readyStyle = useAnimatedStyle(() => ({
-    opacity: ready.value ? 1 : 0, // hidden until the first measurement pass is applied
+  /** Container height comes straight from the UI thread (no React re-render needed when
+   *  rows are measured). Hidden until the first measurement pass is applied. */
+  const containerStyle = useAnimatedStyle(() => ({
+    // While the first measurement is pending, fill the visible area (below the header)
+    // so the loader can be centered on the screen.
+    height: ready.value
+      ? totalHeight.value
+      : Math.max(
+          totalHeight.value,
+          viewH.value > 0 ? viewH.value - headerH.value : LOADER_MIN_HEIGHT,
+        ),
   }))
+  const rowsStyle = useAnimatedStyle(() => ({ opacity: fade.value }))
+  const loaderStyle = useAnimatedStyle(() => ({ opacity: 1 - fade.value }))
 
   return (
     <Animated.ScrollView
@@ -795,28 +1076,48 @@ export function SelectableSortableList<T>({
         </View>
       ) : null}
 
-      <Animated.View style={[{ height: totalJs }, readyStyle]}>
-        {data.map((item, index) => {
-          const id = ids[index]
-          return (
-            <SortableRow
-              key={id}
-              id={id}
-              initialTop={initialTops[id]}
-              pressMs={pressMs}
-              fixedHeight={fixed ? jsHeights[id] : undefined}
-              ctx={ctx}
-              badge={badge}
+      <Animated.View style={containerStyle}>
+        <Animated.View style={[{ flex: 1 }, rowsStyle]}>
+          <BadgeCountContext.Provider value={count}>
+            {data.map((item, index) => {
+              const id = ids[index]
+              return (
+                <SortableRow
+                  key={id}
+                  id={id}
+                  initialTop={initialTops[id]}
+                  pressMs={pressMs}
+                  fixedHeight={fixed ? jsHeights[id] : undefined}
+                  ctx={ctx}
+                  item={item}
+                  index={index}
+                  isSelected={selectedSet.has(id)}
+                  selectionMode={selectionMode}
+                  selectedCount={count}
+                  renderItem={renderItem}
+                  renderBadge={renderBadge}
+                />
+              )
+            })}
+          </BadgeCountContext.Provider>
+        </Animated.View>
+
+        {loader === null ? null : (
+          <Animated.View
+            pointerEvents='none'
+            style={[
+              { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
+              loaderStyle,
+            ]}
+          >
+            <View
+              className={loaderContainerClassName}
+              style={{ width: '100%', flexGrow: 1 }}
             >
-              {renderItem(item, {
-                index,
-                isSelected: selectedSet.has(id),
-                selectionMode,
-                selectedCount: count,
-              })}
-            </SortableRow>
-          )
-        })}
+              {loader ?? <ActivityIndicator size='large' />}
+            </View>
+          </Animated.View>
+        )}
       </Animated.View>
 
       {ListFooterComponent}

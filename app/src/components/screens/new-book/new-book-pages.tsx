@@ -4,25 +4,28 @@ import { BottomBar, TopBar } from '@/components/app/app-layout'
 import { SelectableSortableList } from '@/components/app/sortable-list'
 import { GoogleSansText } from '@/components/ui/fonts'
 import { DefaultPressable } from '@/components/ui/pressable'
-import { PageType, useNewBookContext } from '@/context/scan-context'
+import { PageType, useNewBookContext } from '@/context/new-book-context'
 import { ensureInterop } from '@/utils/icon-interop'
-import { Image } from 'expo-image'
 import { router } from 'expo-router'
 import {
   ArrowRight,
   BookOpenCheck,
+  Check,
   ClockFading,
   Ghost,
   ScanText,
   Square,
   SquareCheck,
   WavesHorizontal,
+  X,
 } from 'lucide-react-native'
 import { Pressable, View } from 'react-native'
 import {
   extractText,
   scanPage,
 } from '../../../../modules/page-scan-module/src/PageScanModule'
+
+const ITEM_HEIGHT = 96
 
 function ScanPagesPressable() {
   const { pages, setPages } = useNewBookContext()
@@ -110,7 +113,7 @@ export function ScanPagesBottomBar() {
         <View className='px-4 pt-4 pb-2'>
           <DefaultPressable
             text='Deselect'
-            variant='primary'
+            variant='brand'
             Icon={WavesHorizontal}
             onPress={() => setSelectedPages([])}
           />
@@ -150,25 +153,37 @@ export function AddPagesTopBar() {
   const ActionButton = () => {
     if (isSelecting) {
       return (
-        <Pressable onPress={deleteSelectedPages}>
+        <Pressable
+          className='flex-row gap-1 items-center'
+          onPress={deleteSelectedPages}
+        >
           <GoogleSansText
             variant='bold'
             className='text-red-500 text-lg'
           >
-            Delete
+            Remove
           </GoogleSansText>
+          <View className='size-4 items-center justify-center'>
+            <X className='text-red-500 size-4' />
+          </View>
         </Pressable>
       )
     }
 
     return (
-      <Pressable onPress={done}>
+      <Pressable
+        className='flex-row gap-1 items-center'
+        onPress={done}
+      >
         <GoogleSansText
           variant='bold'
           className='text-brand-primary text-lg'
         >
           Done
         </GoogleSansText>
+        <View className='size-4 items-center justify-center'>
+          <Check className='text-brand-primary size-4' />
+        </View>
       </Pressable>
     )
   }
@@ -199,11 +214,13 @@ export function PageList() {
     <SelectableSortableList<PageType>
       className='flex-1'
       data={pages}
+      itemHeight={ITEM_HEIGHT}
       keyExtractor={(item) => item.id}
       onReorder={setPages}
       selectedIds={selectedPages}
       onSelectionChange={setSelectedPages}
       badgeClassName='bg-brand-primary'
+      loader={<PageListLoader />}
       renderItem={(item, info) => (
         <PageItem
           page={item}
@@ -213,6 +230,14 @@ export function PageList() {
         />
       )}
     />
+  )
+}
+
+function PageListLoader() {
+  return (
+    <View className='flex-1 items-center justify-center'>
+      <CircleActivityIndicator />
+    </View>
   )
 }
 
@@ -276,29 +301,45 @@ function PageItem({
         )
       case 'ready':
         return (
-          <GoogleSansText
-            className='text-xs text-text-secondary'
-            numberOfLines={1}
-            style={{
-              includeFontPadding: false,
-            }}
-          >
-            {page.text}
-          </GoogleSansText>
+          <View className='flex-row gap-2 items-center'>
+            <Check className='text-brand-primary size-4' />
+            <GoogleSansText
+              className='text-xs text-text-secondary flex-1'
+              numberOfLines={1}
+              ellipsizeMode='middle'
+              style={{
+                includeFontPadding: false,
+              }}
+            >
+              {page.text}
+            </GoogleSansText>
+          </View>
         )
       case 'error':
         return (
           <TextAlert
             variant='default'
-            textSize='xs'
+            size='xs'
             text='Failed to extract text from this page.'
           />
         )
     }
   }
 
+  const goToPage = () => {
+    router.push({
+      pathname: '/(protected)/new-book/[page_id]',
+      params: { page_id: page.id },
+    })
+  }
+
   return (
-    <View className='px-4 pb-2 h-full'>
+    <Pressable
+      className='px-4 pb-2'
+      style={{ height: ITEM_HEIGHT }}
+      onPress={goToPage}
+      disabled={selectionMode}
+    >
       <PageSection isSelected={isSelected}>
         <View className='flex-row gap-4 items-center'>
           {selectionMode && (
@@ -310,15 +351,15 @@ function PageItem({
               )}
             </View>
           )}
-          <View className='rounded-xl overflow-hidden'>
+          {/* <View className='rounded-xl overflow-hidden'>
             <Image
               source={{
                 uri: page.uri,
               }}
               contentFit='cover'
-              style={{ width: 64, height: 64 }}
+              style={{ width: 48, height: 48 }}
             />
-          </View>
+          </View> */}
           <View className={`flex-1 gap-1 ${selectionMode ? '' : 'pr-4'}`}>
             <GoogleSansText
               variant='bold'
@@ -338,10 +379,17 @@ function PageItem({
               Scanned as page {page.id}
             </GoogleSansText>
           </View>
-          {!selectionMode && <ArrowRight className='text-icon' />}
+          {!selectionMode && (
+            <Pressable
+              className=''
+              onPress={goToPage}
+            >
+              <ArrowRight className='text-icon' />
+            </Pressable>
+          )}
         </View>
       </PageSection>
-    </View>
+    </Pressable>
   )
 }
 
@@ -353,11 +401,7 @@ function PageSection({
   children: React.ReactNode
 }) {
   return (
-    <View
-      className={`rounded-xl p-4 bg-bg-secondary gap-2 border flex-1 justify-center ${
-        isSelected ? 'border-brand-primary/60' : 'border-transparent'
-      }`}
-    >
+    <View className='rounded-xl p-4 bg-bg-secondary gap-2 flex-1 justify-center'>
       {children}
     </View>
   )
@@ -372,4 +416,6 @@ ensureInterop([
   SquareCheck,
   WavesHorizontal,
   ClockFading,
+  Check,
+  X,
 ])

@@ -3,10 +3,10 @@ import TextAlert from '@/components/app/alert'
 import { GoogleSansText } from '@/components/ui/fonts'
 import { TextInputField } from '@/components/ui/input'
 import { ToggleSwitch } from '@/components/ui/switch'
-import { useNewBookContext } from '@/context/scan-context'
+import { useNewBookContext } from '@/context/new-book-context'
 import { ensureInterop } from '@/utils/icon-interop'
 import { router } from 'expo-router'
-import { AlertCircle, ArrowRight, Check, FilePlus } from 'lucide-react-native'
+import { AlertCircle, ArrowRight, Check, ScanText } from 'lucide-react-native'
 import { useState } from 'react'
 import { Pressable, View } from 'react-native'
 
@@ -41,7 +41,7 @@ export function NewBookPages() {
     if (pages.length === 0) {
       return (
         <View className='size-4 items-center justify-center'>
-          <FilePlus className='size-4 text-icon' />
+          <ScanText className='size-4 text-icon' />
         </View>
       )
     }
@@ -120,4 +120,4 @@ export function NewBookCloud() {
   )
 }
 
-ensureInterop([ArrowRight, FilePlus])
+ensureInterop([ArrowRight, ScanText])
