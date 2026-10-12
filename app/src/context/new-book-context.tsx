@@ -14,6 +14,8 @@ type ScanContextType = {
   setPages: React.Dispatch<React.SetStateAction<PageType[]>>
   selectedPages: string[]
   setSelectedPages: React.Dispatch<React.SetStateAction<string[]>>
+  currentPageId: string
+  setCurrentPageId: React.Dispatch<React.SetStateAction<string>>
 }
 
 const NewBookContext = createContext<ScanContextType | undefined>(undefined)
@@ -37,10 +39,18 @@ export function NewBookContextProvider({
     ),
   )
   const [selectedPages, setSelectedPages] = useState<string[]>([])
+  const [currentPageId, setCurrentPageId] = useState('')
 
   return (
     <NewBookContext.Provider
-      value={{ pages, setPages, selectedPages, setSelectedPages }}
+      value={{
+        pages,
+        setPages,
+        selectedPages,
+        setSelectedPages,
+        currentPageId,
+        setCurrentPageId,
+      }}
     >
       {children}
     </NewBookContext.Provider>

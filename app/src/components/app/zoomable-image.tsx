@@ -1,9 +1,12 @@
 import { Image, ImageProps } from 'expo-image'
 import { cssInterop } from 'nativewind'
+import { useCallback, useRef } from 'react'
 import { LayoutChangeEvent } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   clamp,
+  runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -19,6 +22,11 @@ type Props = Omit<ImageProps, 'style'> & {
   imageClassName?: string
   maxScale?: number
   doubleTapScale?: number
+  /**
+   * Called whenever the zoom level changes (rounded to 2 decimals, 1 = not zoomed).
+   * Handy for disabling other gestures while zoomed, e.g. scrollEnabled={zoom === 1}.
+   */
+  setZoom?: (zoom: number) => void
 }
 
 export function ZoomableImage({
@@ -26,6 +34,7 @@ export function ZoomableImage({
   imageClassName,
   maxScale = 5,
   doubleTapScale = 2.5,
+  setZoom,
   contentFit = 'contain',
   ...imageProps
 }: Props) {
@@ -43,6 +52,23 @@ export function ZoomableImage({
   const pinching = useSharedValue(false)
   const lastPanX = useSharedValue(0)
   const lastPanY = useSharedValue(0)
+
+  // Keep the latest callback in a ref so the reaction never uses a stale one
+  const setZoomRef = useRef(setZoom)
+  setZoomRef.current = setZoom
+  const notifyZoom = useCallback((zoom: number) => {
+    setZoomRef.current?.(zoom)
+  }, [])
+
+  // Report zoom changes to JS, only when the rounded value actually changes
+  useAnimatedReaction(
+    () => Math.round(scale.value * 100) / 100,
+    (current, previous) => {
+      if (current !== previous) {
+        runOnJS(notifyZoom)(current)
+      }
+    },
+  )
 
   const onLayout = (e: LayoutChangeEvent) => {
     width.value = e.nativeEvent.layout.width

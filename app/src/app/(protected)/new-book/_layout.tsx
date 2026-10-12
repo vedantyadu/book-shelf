@@ -16,8 +16,6 @@ export default function NewBookLayout({
           },
         }}
       >
-        <Stack.Screen name='index' />
-        <Stack.Screen name='[page_id]' />
         <Stack.Screen
           options={{ freezeOnBlur: true }}
           name='pages'

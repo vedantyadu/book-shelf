@@ -104,12 +104,7 @@ export function SubscriptionDescription({
               <Asterisk className='text-text-secondary size-3 stroke-2' />
             </View>
             <View className='flex-1'>
-              <GoogleSansText
-                variant='medium'
-                key={index}
-              >
-                {item}
-              </GoogleSansText>
+              <GoogleSansText key={index}>{item}</GoogleSansText>
             </View>
           </View>
         )

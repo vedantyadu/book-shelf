@@ -6,6 +6,7 @@ import { GoogleSansText } from '@/components/ui/fonts'
 import { DefaultPressable } from '@/components/ui/pressable'
 import { PageType, useNewBookContext } from '@/context/new-book-context'
 import { ensureInterop } from '@/utils/icon-interop'
+import { Image } from 'expo-image'
 import { router } from 'expo-router'
 import {
   ArrowRight,
@@ -273,6 +274,15 @@ function PageItem({
   isSelected: boolean
   selectionMode: boolean
 }) {
+  const { setCurrentPageId } = useNewBookContext()
+
+  const goToPage = () => {
+    setCurrentPageId(page.id)
+    router.push({
+      pathname: '/(protected)/new-book/pages/view-page',
+    })
+  }
+
   const Description = () => {
     switch (page.state) {
       case 'queued':
@@ -326,13 +336,6 @@ function PageItem({
     }
   }
 
-  const goToPage = () => {
-    router.push({
-      pathname: '/(protected)/new-book/[page_id]',
-      params: { page_id: page.id },
-    })
-  }
-
   return (
     <Pressable
       className='px-4 pb-2'
@@ -351,15 +354,15 @@ function PageItem({
               )}
             </View>
           )}
-          {/* <View className='rounded-xl overflow-hidden'>
+          <View className='rounded-xl overflow-hidden'>
             <Image
               source={{
                 uri: page.uri,
               }}
               contentFit='cover'
-              style={{ width: 48, height: 48 }}
+              style={{ width: 64, height: 64 }}
             />
-          </View> */}
+          </View>
           <View className={`flex-1 gap-1 ${selectionMode ? '' : 'pr-4'}`}>
             <GoogleSansText
               variant='bold'
