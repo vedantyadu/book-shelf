@@ -1,8 +1,9 @@
+import { BottomBar } from '@/components/app/app-layout'
 import { GoogleSansText } from '@/components/ui/fonts'
 import { DefaultPressable } from '@/components/ui/pressable'
 import { ensureInterop } from '@/utils/icon-interop'
 import { router } from 'expo-router'
-import { BookPlus, Settings } from 'lucide-react-native'
+import { Plus, Settings } from 'lucide-react-native'
 import { Pressable, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -39,20 +40,17 @@ export function AddBookPressable() {
   }
 
   return (
-    <View
-      className='absolute  left-4 right-4'
-      style={{
-        bottom: insets.bottom + 16,
-      }}
-    >
-      <DefaultPressable
-        text='New book'
-        Icon={BookPlus}
-        variant='brand'
-        onPress={newBook}
-      />
-    </View>
+    <BottomBar>
+      <View className='px-4'>
+        <DefaultPressable
+          text='New book'
+          Icon={Plus}
+          variant='brand'
+          onPress={newBook}
+        />
+      </View>
+    </BottomBar>
   )
 }
 
-ensureInterop([BookPlus])
+ensureInterop([Plus])

@@ -3,6 +3,7 @@ import {
   NewBookCloud,
   NewBookDetails,
   NewBookPages,
+  SaveNewBookPressable,
 } from '@/components/screens/new-book/new-book-sections'
 import { Section } from '@/components/ui/section'
 import { ScrollView, View } from 'react-native'
@@ -21,6 +22,7 @@ export default function ScanResultScreen() {
               <NewBookDetails />
               <NewBookPages />
               <NewBookCloud />
+              <SaveNewBookPressable />
             </View>
           </Section>
         </View>

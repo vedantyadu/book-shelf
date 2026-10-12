@@ -2,11 +2,18 @@ import { CircleActivityIndicator } from '@/components/app/activity-indicator'
 import TextAlert from '@/components/app/alert'
 import { GoogleSansText } from '@/components/ui/fonts'
 import { TextInputField } from '@/components/ui/input'
+import { DefaultPressable } from '@/components/ui/pressable'
 import { ToggleSwitch } from '@/components/ui/switch'
 import { useNewBookContext } from '@/context/new-book-context'
 import { ensureInterop } from '@/utils/icon-interop'
 import { router } from 'expo-router'
-import { AlertCircle, ArrowRight, Check, ScanText } from 'lucide-react-native'
+import {
+  AlertCircle,
+  ArrowRight,
+  Check,
+  CircleCheck,
+  ScanText,
+} from 'lucide-react-native'
 import { useState } from 'react'
 import { Pressable, View } from 'react-native'
 
@@ -69,7 +76,7 @@ export function NewBookPages() {
 
     return (
       <View className='size-4 items-center justify-center'>
-        <Check className='size-4 text-brand-primary' />
+        <CircleCheck className='size-4 text-brand-primary' />
       </View>
     )
   }
@@ -120,4 +127,26 @@ export function NewBookCloud() {
   )
 }
 
-ensureInterop([ArrowRight, ScanText])
+export function SaveNewBookPressable() {
+  const { pages } = useNewBookContext()
+
+  const validateForm = () => {
+    const ready = pages.every(
+      (page) => page.state !== 'processing' && page.state !== 'queued',
+    )
+
+    return ready
+  }
+
+  return (
+    <DefaultPressable
+      text='Save'
+      variant='brand'
+      Icon={Check}
+      disabled={!validateForm()}
+      onPress={() => {}}
+    />
+  )
+}
+
+ensureInterop([ArrowRight, ScanText, Check, CircleCheck])

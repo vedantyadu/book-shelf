@@ -6,21 +6,22 @@ import { GoogleSansText } from '@/components/ui/fonts'
 import { DefaultPressable } from '@/components/ui/pressable'
 import { PageType, useNewBookContext } from '@/context/new-book-context'
 import { ensureInterop } from '@/utils/icon-interop'
-import { Image } from 'expo-image'
 import { router } from 'expo-router'
 import {
   ArrowRight,
   BookOpenCheck,
   Check,
+  CircleCheck,
   ClockFading,
   Ghost,
   ScanText,
   Square,
   SquareCheck,
+  Trash,
   WavesHorizontal,
-  X,
 } from 'lucide-react-native'
 import { Pressable, View } from 'react-native'
+import { twMerge } from 'tailwind-merge'
 import {
   extractText,
   scanPage,
@@ -113,8 +114,8 @@ export function ScanPagesBottomBar() {
       <BottomBar>
         <View className='px-4 pt-4 pb-2'>
           <DefaultPressable
-            text='Deselect'
-            variant='brand'
+            text='Deselect all'
+            variant='secondary'
             Icon={WavesHorizontal}
             onPress={() => setSelectedPages([])}
           />
@@ -160,12 +161,12 @@ export function AddPagesTopBar() {
         >
           <GoogleSansText
             variant='bold'
-            className='text-red-500 text-lg'
+            className='text-red-400 text-lg'
           >
-            Remove
+            Delete
           </GoogleSansText>
           <View className='size-4 items-center justify-center'>
-            <X className='text-red-500 size-4' />
+            <Trash className='text-red-400 size-4' />
           </View>
         </Pressable>
       )
@@ -292,7 +293,7 @@ function PageItem({
               className='text-icon'
               size={12}
             />
-            <GoogleSansText className='text-xs text-text-secondary'>
+            <GoogleSansText className='text-sm text-text-secondary'>
               Queued
             </GoogleSansText>
           </View>
@@ -304,7 +305,7 @@ function PageItem({
               iconSize={12}
               strokeWidth={2}
             />
-            <GoogleSansText className='text-xs text-text-secondary'>
+            <GoogleSansText className='text-sm text-text-secondary'>
               Extracting text
             </GoogleSansText>
           </View>
@@ -312,9 +313,9 @@ function PageItem({
       case 'ready':
         return (
           <View className='flex-row gap-2 items-center'>
-            <Check className='text-brand-primary size-4' />
+            <CircleCheck className='text-brand-primary size-4' />
             <GoogleSansText
-              className='text-xs text-text-secondary flex-1'
+              className='text-sm text-text-secondary flex-1'
               numberOfLines={1}
               ellipsizeMode='middle'
               style={{
@@ -329,7 +330,6 @@ function PageItem({
         return (
           <TextAlert
             variant='default'
-            size='xs'
             text='Failed to extract text from this page.'
           />
         )
@@ -338,7 +338,7 @@ function PageItem({
 
   return (
     <Pressable
-      className='px-4 pb-2'
+      className='px-4 pb-3'
       style={{ height: ITEM_HEIGHT }}
       onPress={goToPage}
       disabled={selectionMode}
@@ -347,33 +347,33 @@ function PageItem({
         <View className='flex-row gap-4 items-center'>
           {selectionMode && (
             <View className='size-5 items-center justify-center'>
-              {isSelected ? (
-                <SquareCheck className='text-brand-primary size-5' />
-              ) : (
-                <Square className='text-icon size-5' />
-              )}
+              <View
+                className={twMerge(
+                  'size-5 items-center justify-center absolute border-2 border-brand-primary rounded-md',
+                  isSelected ? 'bg-brand-primary border-none' : '',
+                )}
+              >
+                {isSelected && (
+                  <Check
+                    className='text-text-primary size-3'
+                    strokeWidth={4}
+                  />
+                )}
+              </View>
             </View>
           )}
-          <View className='rounded-xl overflow-hidden'>
-            <Image
-              source={{
-                uri: page.uri,
-              }}
-              contentFit='cover'
-              style={{ width: 64, height: 64 }}
-            />
-          </View>
+
           <View className={`flex-1 gap-1 ${selectionMode ? '' : 'pr-4'}`}>
             <GoogleSansText
               variant='bold'
-              className='text-text-secondary'
+              className='text-text-primary text-lg'
             >
               Page {pageNumber + 1}
             </GoogleSansText>
 
             <Description />
             <GoogleSansText
-              className='text-xs text-icon'
+              className='text-sm text-icon'
               style={{
                 includeFontPadding: false,
               }}
@@ -419,6 +419,6 @@ ensureInterop([
   SquareCheck,
   WavesHorizontal,
   ClockFading,
-  Check,
-  X,
+  CircleCheck,
+  Trash,
 ])

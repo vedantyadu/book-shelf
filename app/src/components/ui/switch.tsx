@@ -1,4 +1,9 @@
-import { BRAND_PRIMARY_COLOR, DARK_ICON_COLOR } from '@/utils/themes'
+import {
+  BRAND_PRIMARY_COLOR,
+  DARK_ICON_COLOR,
+  LIGHT_ICON_COLOR,
+} from '@/utils/themes'
+import { useColorScheme } from 'nativewind'
 import { Pressable } from 'react-native'
 import Animated, {
   interpolateColor,
@@ -12,7 +17,10 @@ type Props = {
   onValueChange: (value: boolean) => void
   width?: number
   height?: number
-  trackColors?: { off: string; on: string }
+  trackColors?: {
+    off: { light: string; dark: string }
+    on: { light: string; dark: string }
+  }
   thumbColor?: string
 }
 
@@ -21,9 +29,14 @@ export function ToggleSwitch({
   onValueChange,
   width = 40,
   height = 24,
-  trackColors = { off: DARK_ICON_COLOR, on: BRAND_PRIMARY_COLOR },
+  trackColors = {
+    off: { light: LIGHT_ICON_COLOR, dark: DARK_ICON_COLOR },
+    on: { light: BRAND_PRIMARY_COLOR, dark: BRAND_PRIMARY_COLOR },
+  },
   thumbColor = '#fff',
 }: Props) {
+  const { colorScheme } = useColorScheme()
+
   const padding = 3
   const thumbSize = height - padding * 2
   const travel = width - thumbSize - padding * 2
@@ -36,7 +49,9 @@ export function ToggleSwitch({
     backgroundColor: interpolateColor(
       progress.value,
       [0, 1],
-      [trackColors.off, trackColors.on],
+      colorScheme === 'light'
+        ? [trackColors.off.light, trackColors.on.light]
+        : [trackColors.off.dark, trackColors.on.dark],
     ),
   }))
 
