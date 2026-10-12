@@ -35,11 +35,10 @@ import React, {
   useRef,
   useState,
 } from 'react'
-import { ActivityIndicator, View } from 'react-native'
+import { ActivityIndicator, Dimensions, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   SharedValue,
-  runOnJS,
   scrollTo,
   useAnimatedProps,
   useAnimatedReaction,
@@ -51,7 +50,9 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 import { GoogleSansText } from '../ui/fonts'
+import { CircleActivityIndicator } from './activity-indicator'
 
 /* ------------------------------------------------------------------ */
 /* Public types                                                        */
@@ -88,6 +89,35 @@ export type SelectableSortableListProps<T> = {
    */
   heightCacheKey?: string
 
+  /**
+   * Only mount the rows that are visible plus a buffer (windowing). Greatly reduces mount,
+   * unmount and re-render cost for long lists. Row components lose their local state when
+   * they scroll far out of view, so keep important state in your data. Default true.
+   */
+  virtualize?: boolean
+  /** How many screens of rows to keep mounted above AND below the viewport. Default 0.5. */
+  windowBuffer?: number
+  /**
+   * Loader shown at the edge of the mounted rows when the user scrolls faster than rows can
+   * mount. It is a single element (not one per row) and the user cannot scroll past it until
+   * more rows are mounted. Omit for a default spinner; pass null to disable the loader and
+   * the scroll limit.
+   */
+  renderEdgeLoader?:
+    | ((info: {
+        position: 'top' | 'bottom'
+        height: number
+      }) => React.ReactElement | null)
+    | null
+  /** Height reserved for the edge loader. Default 64. */
+  edgeLoaderHeight?: number
+  /**
+   * Minimum time (ms) the edge loader stays on screen once the user reaches it, before the
+   * next rows are mounted. An artificial delay that avoids a flash of the loader and makes
+   * loading feel deliberate. It only applies when the user actually reaches the loader.
+   * 0 disables it. Default 350.
+   */
+  edgeLoaderMinMs?: number
   /**
    * Wait until navigation transitions/interactions finish before mounting the heavy list.
    * Default true.
@@ -227,6 +257,18 @@ function slotFor(
   return bestT
 }
 
+/** Index of the row under list-space y (rows are stacked in `order`), or -1. */
+function rowAt(order: string[], hs: Heights, est: number, y: number): number {
+  'worklet'
+  if (y < 0) return -1
+  let acc = 0
+  for (let i = 0; i < order.length; i++) {
+    acc += hOf(hs, order[i], est)
+    if (y < acc) return i
+  }
+  return -1
+}
+
 function clamp(v: number, lo: number, hi: number) {
   'worklet'
   return Math.min(Math.max(v, lo), hi)
@@ -273,8 +315,6 @@ type Ctx = {
 type RowProps = {
   id: string
   initialTop: number
-  /** Hold time before this row's drag activates (depends on selection mode). */
-  pressMs: number
   /** Set when heights are known up front; undefined => measure with onLayout. */
   fixedHeight?: number
   ctx: Ctx
@@ -295,7 +335,6 @@ function areEqual(a: RowProps, b: RowProps) {
   return (
     a.id === b.id &&
     a.initialTop === b.initialTop &&
-    a.pressMs === b.pressMs &&
     a.fixedHeight === b.fixedHeight &&
     a.ctx === b.ctx &&
     a.item === b.item &&
@@ -323,7 +362,6 @@ const RowBadge = memo(function RowBadge({
 const SortableRow = memo(function SortableRow({
   id,
   initialTop,
-  pressMs,
   fixedHeight,
   ctx,
   item,
@@ -335,29 +373,13 @@ const SortableRow = memo(function SortableRow({
   renderBadge,
 }: RowProps) {
   const {
-    est,
     badgeContainerClassName,
-    heights,
-    orderIds,
     selectedMap,
     tops,
     isDragging,
     activeId,
-    activeH,
-    startTop,
-    startScroll,
-    translation,
     dragTop,
-    scrollY,
-    autoActive,
     suppress,
-    insertSlot,
-    groupOffset,
-    onTap,
-    onSelect,
-    onDrop,
-    onDragStart,
-    onDragEnd,
     reportHeight,
   } = ctx
 
@@ -410,83 +432,6 @@ const SortableRow = memo(function SortableRow({
     },
   )
 
-  const gesture = useMemo(() => {
-    const pan = Gesture.Pan()
-      .activateAfterLongPress(pressMs)
-      .onStart(() => {
-        'worklet'
-        // 0. Flag the drag on the JS side first, so the selection update that follows
-        //    can never rebuild the gesture while it is being activated.
-        runOnJS(onDragStart)()
-
-        // 1. Long-press selects the row if it isn't already.
-        let map = selectedMap.value
-        if (!map[id]) {
-          map = { ...map, [id]: true }
-          selectedMap.value = map
-          runOnJS(onSelect)(id)
-        }
-
-        // 2. Measure: the row's top, and the height of selected rows above it.
-        const order = orderIds.value
-        const hs = heights.value
-        let acc = 0
-        let top = 0
-        let offset = 0
-        let found = false
-        for (let i = 0; i < order.length; i++) {
-          const oid = order[i]
-          if (oid === id) {
-            top = acc
-            found = true
-          } else if (!found && map[oid]) {
-            offset += hOf(hs, oid, est)
-          }
-          acc += hOf(hs, oid, est)
-        }
-        groupOffset.value = offset
-        activeH.value = hOf(hs, id, est)
-        startTop.value = top
-        startScroll.value = scrollY.value
-        translation.value = 0
-        autoActive.value = false
-        insertSlot.value = slotFor(order, map, hs, est, top, offset)
-        activeId.value = id
-        isDragging.value = true
-      })
-      .onUpdate((e) => {
-        'worklet'
-        translation.value = e.translationY
-      })
-      .onFinalize(() => {
-        'worklet'
-        if (activeId.value !== id) return // gesture never activated
-        const moved = Math.abs(dragTop.value - startTop.value) > 8
-        if (moved) {
-          const next = buildOrder(
-            orderIds.value,
-            selectedMap.value,
-            insertSlot.value,
-          )
-          orderIds.value = next
-          runOnJS(onDrop)(next)
-        }
-        autoActive.value = false
-        isDragging.value = false
-        activeId.value = ''
-        runOnJS(onDragEnd)()
-      })
-
-    const tap = Gesture.Tap()
-      .maxDuration(pressMs)
-      .onEnd((_e, success) => {
-        'worklet'
-        if (success) runOnJS(onTap)(id)
-      })
-
-    return Gesture.Race(pan, tap)
-  }, [id, est, pressMs]) // eslint-disable-line react-hooks/exhaustive-deps
-
   const rowStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
     zIndex: isActive.value || scale.value > 1.001 ? 10 : 1,
@@ -496,7 +441,7 @@ const SortableRow = memo(function SortableRow({
   const badgeStyle = useAnimatedStyle(() => ({ opacity: badgeOpacity.value }))
 
   return (
-    <GestureDetector gesture={gesture}>
+    <>
       <Animated.View
         className='absolute left-0 right-0 top-0'
         style={[
@@ -520,13 +465,50 @@ const SortableRow = memo(function SortableRow({
           </Animated.View>
         ) : null}
       </Animated.View>
-    </GestureDetector>
+    </>
   )
 }, areEqual)
 
 /* ------------------------------------------------------------------ */
 /* Public component: defers the heavy mount until transitions finish  */
 /* ------------------------------------------------------------------ */
+
+type Bounds = { top: number; bottom: number }
+
+/** The single loader that sits at the top / bottom edge of the mounted rows. */
+const EdgeLoader = memo(function EdgeLoader({
+  position,
+  height,
+  bounds,
+  isDragging,
+  children,
+}: {
+  position: 'top' | 'bottom'
+  height: number
+  bounds: { readonly value: Bounds }
+  isDragging: { readonly value: boolean }
+  children: React.ReactNode
+}) {
+  const style = useAnimatedStyle(() => {
+    const b = bounds.value
+    return {
+      height,
+      opacity: isDragging.value ? 0 : 1,
+      transform: [
+        { translateY: position === 'top' ? b.top - height : b.bottom },
+      ],
+    }
+  })
+  return (
+    <Animated.View
+      pointerEvents='none'
+      className='absolute left-0 right-0 top-0 justify-center'
+      style={style}
+    >
+      {children}
+    </Animated.View>
+  )
+})
 
 const LOADER_MIN_HEIGHT = 120
 
@@ -628,6 +610,11 @@ function SelectableSortableListImpl<T>({
   itemHeight,
   estimatedItemHeight = 64,
   heightCacheKey = '',
+  virtualize = true,
+  windowBuffer = 0.75,
+  renderEdgeLoader,
+  edgeLoaderHeight = 64,
+  edgeLoaderMinMs = 500,
   loader,
   loaderContainerClassName = 'flex-1 justify-center',
   selectedIds,
@@ -745,16 +732,44 @@ function SelectableSortableListImpl<T>({
   // lookup table, never rendered from directly, so mutating it does not need a re-render).
   const [seed] = useState(() => {
     const knownInit: Heights = {}
-    let all = true
     if (!fixed) {
       for (const id of ids) {
         const c = heightCache.get(cacheKeyOf(heightCacheKey, id))
-        if (c === undefined) all = false
-        else knownInit[id] = c
+        if (c !== undefined) knownInit[id] = c
       }
     }
-    return { known: knownInit, ready: fixed || all }
+    // Rows to mount on the very first render: enough to cover the screen + buffer.
+    const limit = Dimensions.get('window').height * (1 + windowBuffer)
+    const visible: string[] = []
+    let acc = 0
+    let allKnown = true
+    for (let i = 0; i < ids.length; i++) {
+      if (virtualize && acc >= limit) break
+      const id = ids[i]
+      let h: number
+      if (fixed) {
+        h =
+          typeof itemHeight === 'function'
+            ? itemHeight(data[i], i)
+            : (itemHeight as number)
+      } else if (knownInit[id] !== undefined) {
+        h = knownInit[id]
+      } else {
+        h = est
+        allKnown = false
+      }
+      visible.push(id)
+      acc += h
+    }
+    // Ready right away only if every row we are about to show has a known height.
+    return { known: knownInit, ready: fixed || allKnown, visible }
   })
+  const [visibleIds, setVisibleIds] = useState<string[]>(seed.visible)
+  const wall = virtualize && renderEdgeLoader !== null
+  const mountedIds = useSharedValue<string[]>(seed.visible)
+  /** When (Date.now) the user first reached an edge loader; 0 = not at an edge. */
+  const wallHitAt = useSharedValue(0)
+  const pendingWindow = useRef<ReturnType<typeof setTimeout> | null>(null)
   const known = seed.known
 
   const jsHeights = useMemo(() => {
@@ -794,6 +809,7 @@ function SelectableSortableListImpl<T>({
   const autoActive = useSharedValue(false)
   const suppress = useSharedValue(false)
   const ready = useSharedValue(seed.ready)
+  const touchY = useSharedValue(0)
   const fade = useSharedValue(seed.ready ? 1 : 0)
   const lastHeights = useRef<Heights>(jsHeights)
   const insertSlot = useSharedValue(0)
@@ -853,6 +869,10 @@ function SelectableSortableListImpl<T>({
       if (suppressTimer.current) {
         clearTimeout(suppressTimer.current)
         suppressTimer.current = null
+      }
+      if (pendingWindow.current) {
+        clearTimeout(pendingWindow.current)
+        pendingWindow.current = null
       }
     }
   }, [])
@@ -915,6 +935,27 @@ function SelectableSortableListImpl<T>({
     return out
   })
 
+  /** Extent (list coordinates) of the rows that are actually mounted. Without a drag in
+   *  progress the mounted rows are contiguous, so this is where the loaded content ends. */
+  const bounds = useDerivedValue<Bounds>(() => {
+    const total = totalHeight.value
+    if (!wall || isDragging.value) return { top: 0, bottom: total }
+    const tp = tops.value
+    const hs = heights.value
+    const list = mountedIds.value
+    let top = Infinity
+    let bottom = 0
+    for (let i = 0; i < list.length; i++) {
+      const t = tp[list[i]]
+      if (t === undefined) continue
+      if (t < top) top = t
+      const b = t + hOf(hs, list[i], est)
+      if (b > bottom) bottom = b
+    }
+    if (top === Infinity) return { top: 0, bottom: total }
+    return { top, bottom: Math.min(bottom, total) }
+  })
+
   /** Recompute the insertion slot whenever the dragged row moves. */
   useAnimatedReaction(
     () => dragTop.value,
@@ -933,6 +974,66 @@ function SelectableSortableListImpl<T>({
     [est],
   )
 
+  /** Applies a new window from the UI thread. If the user is currently looking at an edge
+   *  loader, hold the update until the loader has been visible for `edgeLoaderMinMs`. */
+  const applyWindow = useCallback(
+    (nextIds: string[]) => {
+      if (pendingWindow.current) {
+        clearTimeout(pendingWindow.current)
+        pendingWindow.current = null
+      }
+      const hit = wallHitAt.value
+      const wait =
+        hit > 0 && edgeLoaderMinMs > 0
+          ? Math.max(0, edgeLoaderMinMs - (Date.now() - hit))
+          : 0
+      if (wait === 0) {
+        setVisibleIds(nextIds)
+        return
+      }
+      pendingWindow.current = setTimeout(() => {
+        pendingWindow.current = null
+        if (!unmounted.current) setVisibleIds(nextIds)
+      }, wait)
+    },
+    [edgeLoaderMinMs], // eslint-disable-line react-hooks/exhaustive-deps
+  )
+
+  /** Windowing: which rows should be mounted? Runs on the UI thread, uses the row tops
+   *  (so rows being carried in a drag are placed correctly), always keeps the dragged row,
+   *  and quantizes the window so React only updates every ~quarter screen of scrolling. */
+  useAnimatedReaction(
+    () => {
+      if (!virtualize) return ''
+      const vh = viewH.value
+      if (vh <= 0) return ''
+      const order = orderIds.value
+      const tp = tops.value
+      const hs = heights.value
+      const snap = Math.max(vh / 4, 50)
+      const buf = vh * windowBuffer
+      const base = scrollY.value - headerH.value
+      const lo = Math.floor((base - buf) / snap) * snap
+      const hi = Math.ceil((base + vh + buf) / snap) * snap
+      const act = isDragging.value ? activeId.value : ''
+      let key = ''
+      for (let i = 0; i < order.length; i++) {
+        const id = order[i]
+        const t = tp[id]
+        if (t === undefined) continue
+        if (id === act || (t < hi && t + hOf(hs, id, est) > lo)) {
+          key += id + '\u241F'
+        }
+      }
+      return key
+    },
+    (key, prev) => {
+      if (key === '' || key === prev) return
+      scheduleOnRN(applyWindow, key.split('\u241F').filter(Boolean))
+    },
+    [est, virtualize, windowBuffer],
+  )
+
   /* ---- scrolling ---- */
   const scrollRef = useAnimatedRef<Animated.ScrollView>()
   const onScroll = useAnimatedScrollHandler({
@@ -945,6 +1046,38 @@ function SelectableSortableListImpl<T>({
         return
       }
       scrollY.value = yy
+      // Walls: the user cannot scroll past the loader at either edge of the mounted rows.
+      // Both limits are enforced here on the UI thread, from the same `bounds` that position
+      // the loaders, so they can never disagree (unlike animated layout heights, which lag).
+      if (wall && !isDragging.value) {
+        const bd = bounds.value
+        const total = totalHeight.value
+        // Remember when an edge loader first came into view (drives the minimum delay).
+        const vTop = yy - headerH.value
+        const touching =
+          (bd.bottom < total - 0.5 && vTop + viewH.value > bd.bottom) ||
+          (bd.top > 0.5 && vTop < bd.top)
+        if (!touching) wallHitAt.value = 0
+        else if (wallHitAt.value === 0) wallHitAt.value = Date.now()
+        const minY =
+          bd.top > 0.5
+            ? Math.max(0, headerH.value + bd.top - edgeLoaderHeight)
+            : 0
+        const maxY =
+          bd.bottom < total - 0.5
+            ? Math.max(
+                minY,
+                headerH.value + bd.bottom + edgeLoaderHeight - viewH.value,
+              )
+            : Infinity
+        const target = yy < minY - 1 ? minY : yy > maxY + 1 ? maxY : yy
+        if (target !== yy) {
+          scrollY.value = target
+          scrollTo(scrollRef, 0, target, false)
+        }
+      } else if (wallHitAt.value !== 0) {
+        wallHitAt.value = 0
+      }
     },
   })
   const scrollProps = useAnimatedProps(() => ({
@@ -1005,7 +1138,145 @@ function SelectableSortableListImpl<T>({
     [est, badgeContainerClassName], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
+  /* ---- ONE gesture for the whole list (instead of two handlers per row) ----
+     Mounting/unmounting hundreds of gesture handlers was the main cost when navigating
+     back, and changing the hold time rebuilt every one of them. The row under the finger
+     is found by hit-testing the touch position against the row heights. */
+  const gesture = useMemo(() => {
+    const pan = Gesture.Pan()
+      .activateAfterLongPress(pressMs)
+      .onBegin((e) => {
+        'worklet'
+        touchY.value = e.y
+      })
+      .onStart(() => {
+        'worklet'
+        const order = orderIds.value
+        const hs = heights.value
+        const idx = rowAt(order, hs, est, touchY.value)
+        if (idx < 0) return // pressed outside any row
+        const id = order[idx]
+
+        // 0. Flag the drag on the JS side first, so the selection update that follows
+        //    can never rebuild the gesture while it is being activated.
+        scheduleOnRN(onDragStart)
+
+        // 1. Long-press selects the row if it isn't already.
+        let map = selectedMap.value
+        if (!map[id]) {
+          map = { ...map, [id]: true }
+          selectedMap.value = map
+          scheduleOnRN(onSelect, id)
+        }
+
+        // 2. Measure: the row's top, and the height of selected rows above it.
+        let acc = 0
+        let top = 0
+        let offset = 0
+        let found = false
+        for (let i = 0; i < order.length; i++) {
+          const oid = order[i]
+          if (oid === id) {
+            top = acc
+            found = true
+          } else if (!found && map[oid]) {
+            offset += hOf(hs, oid, est)
+          }
+          acc += hOf(hs, oid, est)
+        }
+        groupOffset.value = offset
+        activeH.value = hOf(hs, id, est)
+        startTop.value = top
+        startScroll.value = scrollY.value
+        translation.value = 0
+        autoActive.value = false
+        insertSlot.value = slotFor(order, map, hs, est, top, offset)
+        activeId.value = id
+        isDragging.value = true
+      })
+      .onUpdate((e) => {
+        'worklet'
+        if (isDragging.value) translation.value = e.translationY
+      })
+      .onFinalize(() => {
+        'worklet'
+        if (!isDragging.value) return // gesture never started a drag
+        const moved = Math.abs(dragTop.value - startTop.value) > 8
+        if (moved) {
+          const next = buildOrder(
+            orderIds.value,
+            selectedMap.value,
+            insertSlot.value,
+          )
+          orderIds.value = next
+          scheduleOnRN(onDrop, next)
+        }
+        autoActive.value = false
+        isDragging.value = false
+        activeId.value = ''
+        scheduleOnRN(onDragEnd)
+      })
+
+    const tap = Gesture.Tap()
+      .maxDuration(pressMs)
+      .onEnd((e, success) => {
+        'worklet'
+        if (!success) return
+        const order = orderIds.value
+        const idx = rowAt(order, heights.value, est, e.y)
+        if (idx >= 0) scheduleOnRN(onTap, order[idx])
+      })
+
+    return Gesture.Race(pan, tap)
+  }, [est, pressMs]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const count = selected.length
+
+  /** Indices (into `data`) of the rows that are mounted right now. */
+  const renderedIndices = useMemo(() => {
+    if (!virtualize) return ids.map((_, i) => i)
+    const indexById = new Map<string, number>()
+    ids.forEach((id, i) => indexById.set(id, i))
+    let out: number[] = []
+    for (const id of visibleIds) {
+      const i = indexById.get(id)
+      if (i !== undefined) out.push(i)
+    }
+    // New data arrived and the UI thread hasn't reported its window yet: show the top.
+    if (out.length === 0) {
+      out = ids.slice(0, seed.visible.length).map((_, i) => i)
+    }
+    return out.sort((a, b) => a - b)
+  }, [ids, visibleIds, virtualize]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tell the UI thread which rows are REALLY mounted (after React committed them).
+  const renderedIds = useMemo(
+    () => renderedIndices.map((i) => ids[i]),
+    [renderedIndices, ids],
+  )
+  useEffect(() => {
+    mountedIds.value = renderedIds
+  }, [renderedIds]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const moreAbove = wall && renderedIndices.length > 0 && renderedIndices[0] > 0
+  const moreBelow =
+    wall &&
+    renderedIndices.length > 0 &&
+    renderedIndices[renderedIndices.length - 1] < ids.length - 1
+  const edgeLoaderNode = (position: 'top' | 'bottom') =>
+    renderEdgeLoader ? (
+      renderEdgeLoader({ position, height: edgeLoaderHeight })
+    ) : (
+      <View
+        className='items-center justify-center'
+        style={{ height: edgeLoaderHeight }}
+      >
+        <CircleActivityIndicator
+          iconSize={16}
+          strokeWidth={2}
+        />
+      </View>
+    )
 
   /** Stable badge factory. Only selected rows mount a badge, and the count reaches them
    *  through context, so changing the selection never re-renders unrelated rows. */
@@ -1031,16 +1302,20 @@ function SelectableSortableListImpl<T>({
 
   /** Container height comes straight from the UI thread (no React re-render needed when
    *  rows are measured). Hidden until the first measurement pass is applied. */
-  const containerStyle = useAnimatedStyle(() => ({
-    // While the first measurement is pending, fill the visible area (below the header)
-    // so the loader can be centered on the screen.
-    height: ready.value
-      ? totalHeight.value
-      : Math.max(
-          totalHeight.value,
+  const containerStyle = useAnimatedStyle(() => {
+    const total = totalHeight.value
+    if (!ready.value) {
+      // While the first measurement is pending, fill the visible area (below the header)
+      // so the loader can be centered on the screen.
+      return {
+        height: Math.max(
+          total,
           viewH.value > 0 ? viewH.value - headerH.value : LOADER_MIN_HEIGHT,
         ),
-  }))
+      }
+    }
+    return { height: total }
+  })
   const rowsStyle = useAnimatedStyle(() => ({ opacity: fade.value }))
   const loaderStyle = useAnimatedStyle(() => ({ opacity: 1 - fade.value }))
 
@@ -1076,49 +1351,72 @@ function SelectableSortableListImpl<T>({
         </View>
       ) : null}
 
-      <Animated.View style={containerStyle}>
-        <Animated.View style={[{ flex: 1 }, rowsStyle]}>
-          <BadgeCountContext.Provider value={count}>
-            {data.map((item, index) => {
-              const id = ids[index]
-              return (
-                <SortableRow
-                  key={id}
-                  id={id}
-                  initialTop={initialTops[id]}
-                  pressMs={pressMs}
-                  fixedHeight={fixed ? jsHeights[id] : undefined}
-                  ctx={ctx}
-                  item={item}
-                  index={index}
-                  isSelected={selectedSet.has(id)}
-                  selectionMode={selectionMode}
-                  selectedCount={count}
-                  renderItem={renderItem}
-                  renderBadge={renderBadge}
-                />
-              )
-            })}
-          </BadgeCountContext.Provider>
-        </Animated.View>
+      <GestureDetector gesture={gesture}>
+        <Animated.View style={containerStyle}>
+          <Animated.View style={[{ flex: 1 }, rowsStyle]}>
+            <BadgeCountContext.Provider value={count}>
+              {renderedIndices.map((index) => {
+                const item = data[index]
+                const id = ids[index]
+                return (
+                  <SortableRow
+                    key={id}
+                    id={id}
+                    initialTop={initialTops[id]}
+                    fixedHeight={fixed ? jsHeights[id] : undefined}
+                    ctx={ctx}
+                    item={item}
+                    index={index}
+                    isSelected={selectedSet.has(id)}
+                    selectionMode={selectionMode}
+                    selectedCount={count}
+                    renderItem={renderItem}
+                    renderBadge={renderBadge}
+                  />
+                )
+              })}
+            </BadgeCountContext.Provider>
 
-        {loader === null ? null : (
-          <Animated.View
-            pointerEvents='none'
-            style={[
-              { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
-              loaderStyle,
-            ]}
-          >
-            <View
-              className={loaderContainerClassName}
-              style={{ width: '100%', flexGrow: 1 }}
-            >
-              {loader ?? <ActivityIndicator size='large' />}
-            </View>
+            {moreAbove ? (
+              <EdgeLoader
+                position='top'
+                height={edgeLoaderHeight}
+                bounds={bounds}
+                isDragging={isDragging}
+              >
+                {edgeLoaderNode('top')}
+              </EdgeLoader>
+            ) : null}
+            {moreBelow ? (
+              <EdgeLoader
+                position='bottom'
+                height={edgeLoaderHeight}
+                bounds={bounds}
+                isDragging={isDragging}
+              >
+                {edgeLoaderNode('bottom')}
+              </EdgeLoader>
+            ) : null}
           </Animated.View>
-        )}
-      </Animated.View>
+
+          {loader === null ? null : (
+            <Animated.View
+              pointerEvents='none'
+              style={[
+                { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
+                loaderStyle,
+              ]}
+            >
+              <View
+                className={loaderContainerClassName}
+                style={{ width: '100%', flexGrow: 1 }}
+              >
+                {loader ?? <ActivityIndicator size='large' />}
+              </View>
+            </Animated.View>
+          )}
+        </Animated.View>
+      </GestureDetector>
 
       {ListFooterComponent}
     </Animated.ScrollView>

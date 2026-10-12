@@ -1,4 +1,5 @@
-import { SafeScreen, TopBar } from '@/components/app/app-layout'
+import { BottomBar, SafeScreen, TopBar } from '@/components/app/app-layout'
+import { NewBookPageView } from '@/components/screens/new-book/new-book-page-view'
 import { useNewBookContext } from '@/context/new-book-context'
 import { useLocalSearchParams } from 'expo-router'
 
@@ -12,10 +13,8 @@ export default function NewBookPageScreen() {
   return (
     <SafeScreen>
       <TopBar title={`Page ${index + 1}`} />
-      {/* <NewBookPageView
-        page={page}
-        index={index}
-      /> */}
+      {page && <NewBookPageView page={page} />}
+      <BottomBar />
     </SafeScreen>
   )
 }
